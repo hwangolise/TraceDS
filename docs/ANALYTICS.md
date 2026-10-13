@@ -135,14 +135,17 @@ Notes:
 
 ## 5. Feedback (`feedback` table)
 
-Shown on the completion screen. It is optional and can be dismissed. Submitted
-at most once per completion screen view.
+Shown on the completion screen below the completion actions. It is optional,
+never a modal, and never blocks navigation. One successful submission per
+completion screen view; after success it is replaced by "Thanks for the feedback."
+On failure the form stays with the message "Couldn't send feedback right now.
+You can keep practicing." and a "Try again" button (manual retry only, 10 s request timeout).
 
 | Field | Type | Constraint |
 |---|---|---|
-| `helpfulness` | 1–5 | required. Prompt: "How helpful was this for your exam prep?" |
-| `requested_topic` | enum, optional | `double-ended-lists`, `circular-lists`, `doubly-linked-lists`, `big-o`, `quicksort`, `stacks`, `recursion`, `other` |
-| `comments` | text, optional | ≤ 2000 chars. The UI shows "Please don't include your name, email, or student ID." |
+| `helpfulness` | 1–5 | required to submit. Prompt: "How helpful was TraceDS for studying?" Scale labels: 1 "Not helpful" … 5 "Very helpful". |
+| `requested_topic` | enum, optional | Prompt: "What should I add more practice for?" Values (UI label): `linked-lists` (Linked lists), `recursion` (Recursion), `quicksort` (Quicksort), `big-o` (Big-O), `arrays-vs-linked-lists` (Arrays vs. linked lists), `stacks` (Stacks) |
+| `comments` | text, optional | Prompt: "What should I improve?" ≤ 2000 characters; the UI shows a live counter and "Please don't include your name, email, or student ID." Trimmed client-side; omitted when empty. |
 
 ## 6. Launch questions → queries
 
@@ -236,5 +239,7 @@ generate analytics UUIDs (`run_id` and `event_id` belong to the analytics
 layer), manage the session, batch, retry, or know API transport details. `main.tsx` is the
 composition root and may use `session.ts` and `client.ts`.
 
-The feedback form and `POST /feedback` belong to **M8**. M7 implements and
-tests only `GET /health`, `POST /sessions`, and `POST /events`.
+The feedback form and `POST /feedback` were added in **M8**. The form reaches
+the network only through `submitFeedback` in `src/analytics/events.ts`
+(transport in `client.ts`), which emits `survey_submitted` for each attempt and
+then sends the request. The form is not shown when no backend is configured.

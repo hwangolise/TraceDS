@@ -617,8 +617,8 @@ A request or preflight from any other origin may succeed (a preflight may
 return 204), but its response **never** includes
 `Access-Control-Allow-Origin`. A wildcard (`*`) is never sent.
 
-**Scope by milestone:** M7 implements `GET /health`, `POST /sessions`, and
-`POST /events`. `POST /feedback` is implemented and tested in M8.
+**Scope by milestone:** M7 implemented `GET /health`, `POST /sessions`, and
+`POST /events`. M8 added `POST /feedback`.
 
 **`GET /api/v1/health`** → `200 {"status":"ok","database":"ok"|"unavailable"}`.
 It always returns 200 while the process is up. The database status is
@@ -673,11 +673,21 @@ mobile work?" without fingerprinting.
 
 **`POST /api/v1/feedback`**
 ```json
-{ "session_id": "uuid", "helpfulness": 4, "requested_topic": "doubly-linked-lists",
-  "comments": "optional free text, ≤ 2000 chars" }
+{ "session_id": "uuid", "helpfulness": 4, "requested_topic": "recursion",
+  "comments": "optional free text, ≤ 2000 characters" }
 ```
-The response is `201`. `requested_topic` must be one of the values in
-ANALYTICS §5. (M8.)
+`session_id` and `helpfulness` (an integer 1–5; `4.0`, `"4"`, and `true` are
+rejected) are required. `requested_topic` (one of the six values in ANALYTICS
+§5) and `comments` are optional (omit the key; explicit `null` is rejected).
+Unknown fields, including PII-like ones (`email`, `name`, `student_id`,
+`ip_address`, `user_agent`), are rejected with 400. `comments` is limited to
+2000 **characters** (not bytes), matching the column check. U+0000 is rejected
+with 400 (PostgreSQL text cannot hold it), and `""` is stored as NULL. The
+session row is created first if missing, in the same transaction as the insert
+(as `/events` does). A store failure or timeout returns the generic
+`500 {"error":"internal error"}`. The success response is `201 {"status":"ok"}`.
+A student may submit more than once per session (for example after a second
+completion); the UI offers one submission per completion view.
 
 No other endpoints exist. Adding one requires justification in docs and human
 approval.

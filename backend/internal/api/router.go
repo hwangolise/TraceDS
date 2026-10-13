@@ -44,8 +44,8 @@ func (s *server) storeCtx(r *http.Request) (context.Context, context.CancelFunc)
 	return context.WithTimeout(r.Context(), s.storeTimeout)
 }
 
-// NewRouter returns the API handler: exactly GET /health, POST /sessions and
-// POST /events under /api/v1. Everything else is 404/405.
+// NewRouter returns the API handler: exactly GET /health, POST /sessions,
+// POST /events and POST /feedback under /api/v1. Everything else is 404/405.
 func NewRouter(st store.Store, cfg Config) http.Handler {
 	s := &server{st: st, origins: map[string]bool{}, storeTimeout: cfg.StoreTimeout}
 	if s.storeTimeout <= 0 {
@@ -63,6 +63,7 @@ func NewRouter(st store.Store, cfg Config) http.Handler {
 		apiPrefix + "health":   {http.MethodGet, s.health},
 		apiPrefix + "sessions": {http.MethodPost, s.createSession},
 		apiPrefix + "events":   {http.MethodPost, s.postEvents},
+		apiPrefix + "feedback": {http.MethodPost, s.postFeedback},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.cors(w, r)

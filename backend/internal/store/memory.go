@@ -92,6 +92,13 @@ func (m *Memory) Events() []Event {
 	return append([]Event(nil), m.events...)
 }
 
+// Feedback returns a snapshot of the stored feedback rows (test inspection).
+func (m *Memory) Feedback() []Feedback {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Feedback(nil), m.feedback...)
+}
+
 func copyPtr[T any](p *T) *T {
 	if p == nil {
 		return nil

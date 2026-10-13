@@ -1,5 +1,6 @@
 // Restrained completion summary (docs/PRODUCT.md §5). No scores or celebration.
 
+import { FeedbackForm } from '../components/FeedbackForm'
 import { Layout } from '../components/Layout'
 import { primaryButton, secondaryButton, textLink } from '../components/ui'
 import type { CourseModule } from '../content/modules'
@@ -46,6 +47,7 @@ export function CompletionScreen({ exercise, module, results }: CompletionScreen
             Restart this exercise
           </a>
         </p>
+        <FeedbackForm exercise={exercise} />
       </div>
     </Layout>
   )

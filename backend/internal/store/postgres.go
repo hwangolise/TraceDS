@@ -61,8 +61,8 @@ func (p *Postgres) InsertEvents(ctx context.Context, sessionID string, events []
 	return inserted, nil
 }
 
-// InsertFeedback exists so the Store interface is complete; the HTTP endpoint
-// and its behaviour belong to M8.
+// InsertFeedback stores one feedback row (M8). The session is created first if
+// missing, in the same transaction, as /events does.
 func (p *Postgres) InsertFeedback(ctx context.Context, f Feedback) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

@@ -43,21 +43,42 @@ export interface SessionMeta {
   viewport?: 'narrow' | 'wide'
 }
 
+/** The wire body of POST /api/v1/feedback, minus the session id the client adds (ANALYTICS §5). */
+export interface FeedbackPayload {
+  helpfulness: number
+  requested_topic?: string
+  comments?: string
+}
+
 export interface AnalyticsClient {
   /** Queue an event. Never throws, never blocks. */
   track(event: TrackedEvent): void
   /** POST /api/v1/sessions once. Best effort: failures are ignored. */
   registerSession(meta: SessionMeta): void
+  /** Whether a backend is configured, so feedback can be offered at all. */
+  readonly feedbackEnabled: boolean
+  /**
+   * POST /api/v1/feedback once, with no automatic retry. Resolves true only
+   * for a 2xx response; any failure, error status, or a request still
+   * unanswered after 10 s resolves false. Never rejects.
+   */
+  sendFeedback(payload: FeedbackPayload): Promise<boolean>
 }
 
 const FLUSH_AT = 10
 const FLUSH_INTERVAL_MS = 5_000
 const MAX_BATCH = 50
 const RETRY_DELAYS_MS = [1_000, 3_000]
+const FEEDBACK_TIMEOUT_MS = 10_000
 
 type WireEvent = TrackedEvent & { event_id: string; client_ts: string }
 
-const NOOP_CLIENT: AnalyticsClient = { track() {}, registerSession() {} }
+const NOOP_CLIENT: AnalyticsClient = {
+  track() {},
+  registerSession() {},
+  feedbackEnabled: false,
+  sendFeedback: () => Promise.resolve(false),
+}
 
 /** Drops undefined/null members: the API treats absent as omitted and rejects explicit null. */
 function compact<T extends object>(obj: T): T {
@@ -76,6 +97,7 @@ export function createAnalyticsClient(config: ClientConfig): AnalyticsClient {
 
   const eventsUrl = `${base}/api/v1/events`
   const sessionsUrl = `${base}/api/v1/sessions`
+  const feedbackUrl = `${base}/api/v1/feedback`
   let queue: WireEvent[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -129,7 +151,34 @@ export function createAnalyticsClient(config: ClientConfig): AnalyticsClient {
     // no DOM: the timer and size triggers still work
   }
 
+  async function sendFeedback(payload: FeedbackPayload): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const controller = typeof AbortController === 'function' ? new AbortController() : undefined
+      // The timeout wins the race even if the platform's fetch ignores abort.
+      const timeout = new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => {
+          controller?.abort()
+          resolve(false)
+        }, FEEDBACK_TIMEOUT_MS)
+      })
+      const request = doFetch(feedbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: config.sessionId, ...compact(payload) }),
+        signal: controller?.signal,
+      }).then((response) => response.status >= 200 && response.status < 300)
+      return await Promise.race([request.catch(() => false), timeout])
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   return {
+    feedbackEnabled: true,
+    sendFeedback,
     track(event) {
       try {
         queue.push({ ...compact(event), event_id: newUuid(), client_ts: new Date().toISOString() })

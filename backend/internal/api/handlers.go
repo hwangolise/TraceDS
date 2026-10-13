@@ -49,3 +49,18 @@ func (s *server) postEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int{"accepted": n})
 }
+
+func (s *server) postFeedback(w http.ResponseWriter, r *http.Request) {
+	fb, err := decodeFeedback(w, r)
+	if err != nil {
+		writeDecodeError(w, err)
+		return
+	}
+	ctx, cancel := s.storeCtx(r)
+	defer cancel()
+	if err := s.st.InsertFeedback(ctx, fb); err != nil {
+		storeFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"status": "ok"})
+}

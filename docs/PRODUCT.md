@@ -59,7 +59,7 @@ within (number of choices) attempts. Nobody gets stuck, and there is no
 | **Landing** (`#/`) | Product name, one-sentence pitch, module cards (Linked Lists; Recursion "Coming soon" until M6) | Choose a module |
 | **Module** (`#/m/linked-lists`) | Ordered exercises (LL-01 … LL-04) with title, one-line objective, and a "Completed" badge stored locally on this device | Start an exercise |
 | **Exercise** (`#/x/LL-01`) | Code panel (left), memory visualization (right), output panel when relevant, question and choices (below), then feedback. Progress "Step 3 of 6". Collapsible "Node class" reference. Restart control. | Check answer → Continue |
-| **Completion** (`#/x/LL-01/done`) | Summary: steps, first-try correct count, hints used. Next exercise, Restart, Back to module. Optional feedback survey (M8). | Next exercise |
+| **Completion** (`#/x/LL-01/done`) | Summary: steps, first-try correct count, hints used. Next exercise, Restart, Back to module. Optional, anonymous feedback section below the actions (M8): 1–5 helpfulness, optional topic, optional comments. | Next exercise |
 
 There is no other navigation. There are no menus, profiles, settings, or
 dashboards.

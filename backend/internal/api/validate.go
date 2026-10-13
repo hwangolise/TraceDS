@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"traceds/backend/internal/store"
 )
@@ -314,3 +316,67 @@ func decodeEvent(raw json.RawMessage, sessionID string) (store.Event, error) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// --- feedback (M8) ---
+
+const maxCommentChars = 2000 // matches feedback.comments char_length check (ARCHITECTURE §9.3)
+
+var feedbackFields = map[string]bool{"session_id": true, "helpfulness": true, "requested_topic": true, "comments": true}
+
+// feedbackTopics is the closed enum for requested_topic (ANALYTICS §5).
+var feedbackTopics = map[string]bool{
+	"linked-lists": true, "recursion": true, "quicksort": true,
+	"big-o": true, "arrays-vs-linked-lists": true, "stacks": true,
+}
+
+var integerRE = regexp.MustCompile(`^-?[0-9]+$`)
+
+func decodeFeedback(w http.ResponseWriter, r *http.Request) (store.Feedback, error) {
+	var out store.Feedback
+	obj, err := readObject(w, r)
+	if err != nil {
+		return out, err
+	}
+	if err := checkMembers(obj, feedbackFields); err != nil {
+		return out, err
+	}
+	sid, err := asUUID(obj, "session_id", true)
+	if err != nil {
+		return out, err
+	}
+	out.SessionID = *sid
+
+	raw, ok := obj["helpfulness"]
+	if !ok {
+		return out, bad(`field "helpfulness" is required`)
+	}
+	token := string(bytes.TrimSpace(raw))
+	n, convErr := strconv.Atoi(token)
+	if !integerRE.MatchString(token) || convErr != nil || n < 1 || n > 5 {
+		return out, bad(`field "helpfulness" must be an integer from 1 to 5`)
+	}
+	out.Helpfulness = n
+
+	if v, ok, err := asString(obj, "requested_topic"); err != nil {
+		return out, err
+	} else if ok {
+		if !feedbackTopics[v] {
+			return out, bad(`field "requested_topic" is not a supported topic`)
+		}
+		out.RequestedTopic = &v
+	}
+	if v, ok, err := asString(obj, "comments"); err != nil {
+		return out, err
+	} else if ok {
+		if utf8.RuneCountInString(v) > maxCommentChars {
+			return out, bad(`field "comments" must be at most %d characters`, maxCommentChars)
+		}
+		if strings.ContainsRune(v, 0) {
+			return out, bad(`field "comments" contains an unsupported character`)
+		}
+		if v != "" {
+			out.Comments = &v
+		}
+	}
+	return out, nil
+}

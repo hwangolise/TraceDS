@@ -209,7 +209,7 @@ Additional:
 
 ### M7 — Backend and PostgreSQL analytics
 HTTP scope: `GET /api/v1/health`, `POST /api/v1/sessions`, `POST /api/v1/events`
-only. `POST /api/v1/feedback` is M8 (FB1–FB7).
+only. `POST /api/v1/feedback` was added in M8 (FB1–FB7).
 
 Go files: `internal/api/*_test.go` (B1–B12, against `store.Memory`),
 `internal/store/migrations_test.go` (M-1..M-6), `internal/store/postgres_test.go`
@@ -277,20 +277,21 @@ green:** B11, U1, and F-A14 (static regression guards).
 | P4 | E2E slow analytics | API responds after 10 s → answer feedback appears in < 200 ms while slow requests are in flight |
 
 ### M8 — Feedback survey
-Files: `tests/components/FeedbackForm.test.tsx`, Go `feedback_test.go`,
-`e2e/feedback.spec.ts`.
-
-**Expected red:** form missing; handler returns 501.
+Files: `tests/components/FeedbackForm.test.tsx`,
+`tests/screens/CompletionScreen.feedback.test.tsx`,
+`tests/architecture/feedback-boundary.test.ts`, Go `internal/api/feedback_test.go`,
+`internal/store/feedback_test.go` (integration), `e2e/feedback.spec.ts`.
 
 | # | Test | Asserts |
 |---|---|---|
-| FB1 | helpfulness required | Submit is disabled until a 1–5 rating is chosen; the radios are labelled |
-| FB2 | optional fields | topic select (ANALYTICS §5 enum), comments textarea with a 2000-char limit and the no-PII notice visible |
-| FB3 | submit | POST body has exactly `session_id, helpfulness, requested_topic?, comments?`; `survey_submitted` is emitted; the "Thanks" state is shown |
-| FB4 | failure tolerated | POST fails → still shows "Thanks" (no error blocking); no retry loop |
-| FB5 | single submission | double click → one POST |
-| FB6 | backend validation | helpfulness 0 or 6 → 400; unknown topic → 400; comments > 2000 → 400; valid → 201 and a row |
-| FB7 | dismissible | the survey can be skipped; Next exercise works without submitting |
+| FB1 | helpfulness required | Submit is disabled (with a visible reason) until a 1–5 rating is chosen; the radios are labelled; the scale endpoints are explained |
+| FB2 | optional fields | topic select (six topics, ANALYTICS §5), comments textarea with a 2000-char limit, counter, and the no-PII notice |
+| FB3 | submit | POST body has exactly `session_id, helpfulness, requested_topic?, comments?` (absent keys omitted, never null); the existing session id; `survey_submitted` is emitted; the "Thanks" state is shown |
+| FB4 | failure tolerated | 4xx, 5xx, network error, or a 10 s hang → a restrained message, input kept, "Try again", no automatic retry, no unhandled rejection, completion state intact (**changed in M8**: no longer shows "Thanks" on failure) |
+| FB5 | single submission | double click or repeated Enter → one POST |
+| FB6 | backend validation | Go `feedback_test.go`: helpfulness bounds and type, session UUID, topic enum, comments length in characters, NUL, null, unknown and PII-like fields, 413, method, CORS, store failure and timeout, no IP/UA stored; integration: persistence, session creation, constraints, rollback, column set |
+| FB7 | non-blocking | the survey is not a modal and follows the completion actions; Next exercise, Back, and Restart work with the survey untouched, half-filled, pending, or failed |
+| FB-E1..E3 | Playwright | success path; API unavailable then practice another exercise; hung request does not block navigation |
 
 ### M9 — Production polish and accessibility
 Files: `e2e/a11y.spec.ts` (with `@axe-core/playwright`, a dev dependency
