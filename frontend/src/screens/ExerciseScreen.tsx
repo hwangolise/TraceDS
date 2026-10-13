@@ -23,8 +23,6 @@ export interface ExerciseScreenProps {
 
 type PendingFocus = 'hint' | 'continue' | 'question' | null
 
-const isNarrow = () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
-
 export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
   const [run, setRun] = useState(() => startRun(exercise))
   const [selected, setSelected] = useState<string | null>(null)
@@ -49,12 +47,13 @@ export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
     if (target === 'hint') feedbackRef.current?.focus()
     if (target === 'question') legendRef.current?.focus()
     if (target === 'continue') {
-      if (isNarrow()) {
-        // On a phone, show the changed memory first; Continue is still focused.
-        continueRef.current?.focus({ preventScroll: true })
+      // Show the changed memory first. Continue is focused without scrolling;
+      // the page only moves if the memory panel is not fully in view (phones,
+      // and long code such as LL-04 on desktop).
+      continueRef.current?.focus({ preventScroll: true })
+      const rect = memoryRef.current?.getBoundingClientRect()
+      if (rect && (rect.top < 0 || rect.bottom > window.innerHeight)) {
         memoryRef.current?.scrollIntoView?.({ block: 'start' })
-      } else {
-        continueRef.current?.focus()
       }
     }
   }, [run])
@@ -113,7 +112,7 @@ export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
         <section aria-labelledby="code-heading" className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
           <h2 id="code-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
             Java

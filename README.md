@@ -12,8 +12,8 @@ change and explains why it happened. There is no signup.
 
 ## Status
 
-**M0–M3 are approved (LL-01 and LL-02 are playable). M4 (LL-03 and LL-04) is
-in progress.** Run `npm install && npm run dev` in
+**M0–M4 are approved. All four linked-list exercises are playable. The next
+milestone in execution order is M7 (backend and analytics).** Run `npm install && npm run dev` in
 `frontend/` and open the printed URL to try it. `frontend/`
 contains the exercise engine and the memory-diagram renderer. There are no
 exercise screens yet. To preview every diagram, run `npm run dev` in

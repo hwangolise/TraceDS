@@ -28,14 +28,14 @@ describe('router', () => {
 })
 
 describe('modules', () => {
-  it('Linked Lists lists LL-01..LL-04 in order; only LL-01 and LL-02 are available in M3', () => {
+  it('Linked Lists lists LL-01..LL-04 in order, all available (M4)', () => {
     const ll = findModule('linked-lists')!
     expect(ll.title).toBe('Linked Lists')
     expect(ll.exercises.map((e) => [e.id, e.available])).toEqual([
       ['LL-01', true],
       ['LL-02', true],
-      ['LL-03', false],
-      ['LL-04', false],
+      ['LL-03', true],
+      ['LL-04', true],
     ])
     expect(modules.map((m) => m.id)).toEqual(['linked-lists'])
     expect(findModule('recursion')).toBeUndefined()
@@ -45,14 +45,23 @@ describe('modules', () => {
 describe('nextExerciseId', () => {
   const ll = () => findModule('linked-lists')!
 
-  it('prefers the next available exercise not yet completed', () => {
+  it('prefers the next exercise in order that is not yet completed', () => {
     expect(nextExerciseId(ll(), 'LL-01', new Set(['LL-01']))).toBe('LL-02')
-    expect(nextExerciseId(ll(), 'LL-02', new Set(['LL-02']))).toBe('LL-01')
+    expect(nextExerciseId(ll(), 'LL-02', new Set(['LL-01', 'LL-02']))).toBe('LL-03')
+    expect(nextExerciseId(ll(), 'LL-03', new Set(['LL-01', 'LL-02', 'LL-03']))).toBe('LL-04')
+    expect(nextExerciseId(ll(), 'LL-04', new Set(['LL-02', 'LL-03', 'LL-04']))).toBe('LL-01')
+    expect(nextExerciseId(ll(), 'LL-02', new Set(['LL-02', 'LL-03']))).toBe('LL-04')
   })
 
-  it('skips unavailable exercises and wraps around when everything is completed', () => {
-    expect(nextExerciseId(ll(), 'LL-02', new Set(['LL-01', 'LL-02']))).toBe('LL-01')
-    expect(nextExerciseId(ll(), 'LL-01', new Set(['LL-01', 'LL-02']))).toBe('LL-02')
+  it('wraps around to the next exercise when everything is completed', () => {
+    const all = new Set(['LL-01', 'LL-02', 'LL-03', 'LL-04'])
+    expect(nextExerciseId(ll(), 'LL-04', all)).toBe('LL-01')
+    expect(nextExerciseId(ll(), 'LL-02', all)).toBe('LL-03')
+  })
+
+  it('skips unavailable exercises', () => {
+    const partial = { ...ll(), exercises: ll().exercises.map((e) => ({ ...e, available: e.id !== 'LL-03' })) }
+    expect(nextExerciseId(partial, 'LL-02', new Set(['LL-02']))).toBe('LL-04')
   })
 
   it('returns null when there is no other available exercise', () => {

@@ -398,8 +398,12 @@ checkpoints, choices, correctness, or exercises.
   `*emphasis*`), which `components/RichText.tsx` renders. Tests compare every
   string to the doc, and every state to the M2 notation parser.
 - **Registry and modules.** `content/index.ts` holds exercises that have
-  content. `content/modules.ts` lists LL-01..LL-04, so LL-03 and LL-04 show
-  "Coming next" until M4 adds their content. Recursion is not listed.
+  content. `content/modules.ts` lists LL-01..LL-04, all playable since M4. An
+  exercise listed without content would show "Coming next". Recursion is not
+  listed.
+- **BigNum reference panel (M4).** For `bignum-node` exercises, the "Node
+  class" disclosure also lists the BigNum fields `private Node myHead;` and
+  `private int mySize;` (EXERCISES §0.6).
 - **No correctness logic in the UI.** Screens show the engine's run
   (`feedback`, `eliminated`, `results`). They never read `correctChoiceId`
   or misconceptions from content, and test U1 enforces this. The chosen
@@ -410,10 +414,11 @@ checkpoints, choices, correctness, or exercises.
   marked "ran". The diagram shows `run.state` with `previousState`
   highlighting. Continue moves on.
 - **Focus.** A wrong answer moves focus to the hint. A correct answer moves
-  it to Continue. Continue moves it to the next question's legend, and a
-  route change moves it to the page `h1`. On screens narrower than 1024 px, a
-  correct answer also scrolls the memory panel into view (Continue keeps
-  focus without scrolling), so the student sees the change first.
+  it to Continue *without scrolling*. If the memory panel is then not fully in
+  view (phones, and long code such as LL-04 on desktop), the page scrolls it
+  into view, so the student sees the change first. Continue moves focus to
+  the next question's legend, and a route change moves it to the page `h1`.
+  (M4 extended the M3 phone-only behavior to every width.)
 - **Completion.** The completion route (`#/x/<id>/done`) reads results kept in
   App memory. Without them it redirects to the exercise. Re-entering an
   exercise always starts a fresh run at step 1, because in-progress runs are
@@ -527,6 +532,15 @@ RTL tests also use it as a stable assertion surface.
   keyboard stop inside hidden content. The `<figcaption>` is the accessible
   equivalent (`sr-only`, `aria-live="polite"`). "unreachable" and "changed"
   are shown as text badges, not only as styling.
+- **Re-fitting (M4).** The React Flow instance is keyed by the layout
+  signature and a debounced window-resize counter, so it remounts and
+  `fitView` runs on freshly measured nodes. Re-fitting a mounted instance had
+  run before newly added nodes were measured, and clipped them. This was
+  found in M4 and is covered by `e2e/diagram-fit.spec.ts`.
+- **Swipe note (M4).** When the diagram is wider than its box (phones at
+  `MIN_SCALE`), a visible note reads "Swipe sideways to see the whole
+  diagram →". It is `aria-hidden`, because the text description is already
+  complete.
 - **Dev harness.** `?viz-harness` in the dev server (optionally `&only=ll04`)
   renders every EXERCISES.md state. The states are parsed by
   `src/dev/notation.ts` from the doc's §0.2 notation. It is gated on

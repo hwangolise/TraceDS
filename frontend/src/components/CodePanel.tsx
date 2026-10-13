@@ -40,7 +40,7 @@ export function CodePanel({ code, highlighted, mode, focus, terminology }: CodeP
   const nodeClass = nodeClasses[terminology]
   return (
     <div>
-      <ol aria-label="Java code" className="relative overflow-x-auto rounded-md border border-slate-200 bg-slate-50 py-2 font-mono text-[14px] leading-7">
+      <ol aria-label="Java code" className="relative overflow-x-auto rounded-md border border-slate-200 bg-slate-50 py-2 font-mono text-[14px] leading-6">
         {code.map((line, i) => {
           const n = i + 1
           const current = highlighted.includes(n)
@@ -85,6 +85,18 @@ export function CodePanel({ code, highlighted, mode, focus, terminology }: CodeP
             </div>
           ))}
         </pre>
+        {nodeClass.ownerFields && (
+          <>
+            <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-600">{nodeClass.ownerFields.title}</h3>
+            <pre className="mt-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-3 font-mono text-[13px] leading-6 text-slate-800">
+              {nodeClass.ownerFields.code.map((line, i) => (
+                <div key={i}>
+                  <JavaLine line={line} />
+                </div>
+              ))}
+            </pre>
+          </>
+        )}
       </details>
     </div>
   )

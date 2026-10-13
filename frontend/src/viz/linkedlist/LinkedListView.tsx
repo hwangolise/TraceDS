@@ -4,8 +4,8 @@
 // hidden from assistive technology. An equivalent text description (§6.3) is
 // rendered alongside it and announced when the state changes.
 
-import { useEffect, useMemo } from 'react'
-import { ReactFlow, useNodesInitialized, useReactFlow, type NodeTypes } from '@xyflow/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ReactFlow, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { ProgramState } from '../../engine/types'
 import { describe } from '../describe'
@@ -27,14 +27,22 @@ const nodeTypes: NodeTypes = {
   variable: VariablePillView,
 }
 
-/** Re-fits the diagram whenever the rendered state changes. */
-function FitOnChange({ signature }: { signature: string }) {
-  const { fitView } = useReactFlow()
-  const initialized = useNodesInitialized()
+/** Increments when the window is resized, so the diagram re-fits its new width. */
+function useResizeTick(): number {
+  const [tick, setTick] = useState(0)
   useEffect(() => {
-    if (initialized) void fitView({ padding: `${FIT_PADDING}px`, minZoom: MIN_SCALE, maxZoom: 1 })
-  }, [initialized, signature, fitView])
-  return null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onResize = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => setTick((t) => t + 1), 150)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+  return tick
 }
 
 export function LinkedListView({ state, previousState = null }: LinkedListViewProps) {
@@ -43,6 +51,16 @@ export function LinkedListView({ state, previousState = null }: LinkedListViewPr
   const { nodes, edges } = useMemo(() => toFlow(viz, changes), [viz, changes])
   const description = useMemo(() => describe(state), [state])
   const signature = useMemo(() => nodes.map((n) => `${n.id}@${n.position.x},${n.position.y}`).join('|'), [nodes])
+  const resizeTick = useResizeTick()
+
+  // On narrow screens a wide diagram scrolls inside its box; say so, because
+  // a clipped edge alone is easy to miss. (The text description is complete.)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  useEffect(() => {
+    const el = scrollRef.current
+    setOverflowing(!!el && el.scrollWidth > el.clientWidth + 1)
+  }, [signature, resizeTick])
 
   // Below MIN_SCALE the diagram box scrolls sideways instead of shrinking
   // further. Page scrolling is never captured (no pan or zoom gestures).
@@ -75,9 +93,13 @@ export function LinkedListView({ state, previousState = null }: LinkedListViewPr
       {/* Mounted only when there is something to draw, so React Flow always
           measures a visible container (a display:none container measures 0). */}
       {viz.boxes.length > 0 && (
-      <div data-testid="ll-diagram" aria-hidden="true" className="overflow-x-auto overflow-y-hidden">
+      <div ref={scrollRef} data-testid="ll-diagram" aria-hidden="true" className="overflow-x-auto overflow-y-hidden">
         <div style={{ minWidth, height: Math.max(height, 2 * FIT_PADDING + 28) }}>
+          {/* Remounted whenever the layout or window size changes: fitView then
+              runs on freshly measured nodes. (Re-fitting a mounted instance ran
+              before newly added nodes were measured, leaving them clipped.) */}
           <ReactFlow
+            key={`${signature}#${resizeTick}`}
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
@@ -97,11 +119,14 @@ export function LinkedListView({ state, previousState = null }: LinkedListViewPr
             zoomOnDoubleClick={false}
             preventScrolling={false}
             proOptions={{ hideAttribution: true }}
-          >
-            <FitOnChange signature={signature} />
-          </ReactFlow>
+          />
         </div>
       </div>
+      )}
+      {overflowing && (
+        <p aria-hidden="true" className="mt-1 text-xs text-slate-600">
+          Swipe sideways to see the whole diagram →
+        </p>
       )}
       <figcaption className="sr-only" aria-live="polite">
         {description}

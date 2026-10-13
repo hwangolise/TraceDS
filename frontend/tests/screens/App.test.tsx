@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../src/App'
 import { ll01 } from '../../src/content/ll01'
+import { ll04 } from '../../src/content/ll04'
 import type { Exercise } from '../../src/engine/types'
 
 const plain = (text: string) => text.replace(/`/g, '').replace(/\*/g, '')
@@ -49,7 +50,7 @@ describe('Landing', () => {
 })
 
 describe('Linked Lists module', () => {
-  it('is reachable from the landing page and lists LL-01 and LL-02; LL-03/LL-04 are not yet available', async () => {
+  it('is reachable from the landing page and offers all four exercises', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('link', { name: 'Start practicing' }))
@@ -61,12 +62,10 @@ describe('Linked Lists module', () => {
       'LL-03 Linked List Mutation',
       'LL-04 BigNum Deep Copy',
     ])
-    expect(within(items[0]).getByRole('link', { name: /Start/ }).getAttribute('href')).toBe('#/x/LL-01')
-    expect(within(items[1]).getByRole('link', { name: /Start/ }).getAttribute('href')).toBe('#/x/LL-02')
-    for (const item of items.slice(2)) {
-      expect(within(item).queryByRole('link')).toBeNull()
-      expect(item.textContent).toContain('Coming next')
-    }
+    items.forEach((item, i) => {
+      expect(within(item).getByRole('link', { name: /Start/ }).getAttribute('href')).toBe(`#/x/LL-0${i + 1}`)
+      expect(item.textContent).not.toContain('Coming next')
+    })
     expect(document.body.textContent).not.toMatch(/Recursion|REC-0/)
   })
 })
@@ -75,6 +74,8 @@ describe('Starting exercises', () => {
   it.each([
     ['LL-01', 'References & Node Construction', 'Step 1 of 6'],
     ['LL-02', 'Linked List Traversal', 'Step 1 of 8'],
+    ['LL-03', 'Linked List Mutation', 'Step 1 of 4'],
+    ['LL-04', 'BigNum Deep Copy', 'Step 1 of 8'],
   ])('%s can be started from the module page', async (id, title, progress) => {
     const user = userEvent.setup()
     go('#/m/linked-lists')
@@ -165,10 +166,22 @@ describe('Re-entry and resilience', () => {
     expect(screen.getByRole('link', { name: /home/i })).toBeTruthy()
   })
 
-  it('LL-03 and LL-04 are not reachable as exercises yet', () => {
+  it('LL-03 and LL-04 open directly by link', async () => {
     go('#/x/LL-03')
     render(<App />)
-    expect(screen.queryByText(/Step 1 of/)).toBeNull()
-    expect(screen.getByRole('link', { name: /home/i })).toBeTruthy()
+    expect(await screen.findByText('Step 1 of 4')).toBeTruthy()
+    go('#/x/LL-04')
+    expect(await screen.findByText('Step 1 of 8')).toBeTruthy()
+  })
+
+  it('finishing LL-04 records completion and suggests an exercise not yet completed', async () => {
+    window.localStorage.setItem('traceds.completed', JSON.stringify(['LL-01', 'LL-03']))
+    const user = userEvent.setup()
+    go('#/x/LL-04')
+    render(<App />)
+    await playGolden(user, ll04, ['c', 'b', 'd', 'a', 'b', 'c', 'a', 'c'])
+    expect(await screen.findByRole('heading', { name: 'Exercise complete' })).toBeTruthy()
+    expect(JSON.parse(window.localStorage.getItem('traceds.completed')!)).toEqual(['LL-01', 'LL-03', 'LL-04'])
+    expect(screen.getByRole('link', { name: 'Practice another exercise' }).getAttribute('href')).toBe('#/x/LL-02')
   })
 })

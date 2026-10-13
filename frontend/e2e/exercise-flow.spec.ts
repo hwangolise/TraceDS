@@ -62,7 +62,7 @@ test('a student completes LL-01, including a wrong answer and a retry', async ({
 // Found during M3 visual review: content inside the code panel's scroll box
 // once widened the whole page on phones. The page itself must never scroll sideways.
 test('exercise pages never scroll horizontally at the page level', async ({ page }) => {
-  for (const id of ['LL-01', 'LL-02']) {
+  for (const id of ['LL-01', 'LL-02', 'LL-03', 'LL-04']) {
     await page.goto(`/#/x/${id}`)
     await expect(page.getByText(/^Step 1 of/)).toBeVisible()
     const { scrollWidth, clientWidth } = await page.evaluate(() => ({

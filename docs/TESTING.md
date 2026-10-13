@@ -184,7 +184,13 @@ fails validation; screens are missing.
 
 ### M4 — LL-03 and LL-04
 Files: `tests/content/ll03.test.ts`, `tests/content/ll04.test.ts` (C1–C7
-applied to LL-03/LL-04, plus C8–C12), `e2e/ll04-deep-copy.spec.ts`.
+applied to LL-03/LL-04 through `contentTable.test.ts`, plus C8–C12 and
+hand-written state checks for insertion, reference movement, bypass,
+unreachable, `newPtr`/`origPtr`, and `unspecified`), updates to `App.test.tsx`,
+`navigation.test.ts`, and `ExerciseScreen.test.tsx` for four playable
+exercises, `e2e/ll04-deep-copy.spec.ts` (P2), and `e2e/diagram-fit.spec.ts`
+(diagram fits after transitions on desktop; the swipe note on phones), both
+added after visual review.
 
 **Expected red:** content missing or failing validation.
 

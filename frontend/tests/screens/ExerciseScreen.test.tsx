@@ -7,6 +7,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ll01 } from '../../src/content/ll01'
 import { ll02 } from '../../src/content/ll02'
+import { ll03 } from '../../src/content/ll03'
+import { ll04 } from '../../src/content/ll04'
 import type { Exercise } from '../../src/engine/types'
 import { ExerciseScreen } from '../../src/screens/ExerciseScreen'
 import { describe as describeState } from '../../src/viz/describe'
@@ -90,11 +92,21 @@ describe('ExerciseScreen — question (S1)', () => {
     expect(screen.queryByRole('region', { name: 'Output' })).toBeNull()
   })
 
+  it('LL-04 shows the BigNum Node class (digit) and the BigNum fields', () => {
+    setup(ll04)
+    const details = screen.getByText('Node class').closest('details')!
+    expect(details.textContent).toContain('public int digit;')
+    expect(details.textContent).toContain('private Node myHead;')
+    expect(details.textContent).toContain('private int mySize;')
+    expect(details.textContent).not.toMatch(/\bdata\b/)
+  })
+
   it('offers the Node class reference for the exercise', () => {
     setup()
     const details = screen.getByText('Node class').closest('details')!
     expect(details.textContent).toContain('public int data;')
     expect(details.textContent).not.toContain('digit')
+    expect(details.textContent).not.toContain('myHead')
   })
 })
 
@@ -199,6 +211,8 @@ describe('ExerciseScreen — keyboard only (S6)', () => {
 describe.each([
   ['LL-01', ll01, ['b', 'c', 'd', 'a', 'd', 'c']],
   ['LL-02', ll02, ['b', 'a', 'b', 'c', 'a', 'b', 'c', 'b']],
+  ['LL-03', ll03, ['c', 'a', 'b', 'd']],
+  ['LL-04', ll04, ['c', 'b', 'd', 'a', 'b', 'c', 'a', 'c']],
 ] as const)('%s golden path at component level (S4)', (_id, exercise, golden) => {
   it('completes every checkpoint and reports results once', async () => {
     const { user, onComplete } = setup(exercise)

@@ -3,7 +3,14 @@
 
 import type { Terminology } from '../engine/types'
 
-export const nodeClasses: Record<Terminology, { title: string; code: string[] }> = {
+export interface NodeClassReference {
+  title: string
+  code: string[]
+  /** Extra fields of the enclosing class, if the exercise needs them (BigNum). */
+  ownerFields?: { title: string; code: string[] }
+}
+
+export const nodeClasses: Record<Terminology, NodeClassReference> = {
   'generic-node': {
     title: 'Node class',
     code: [
@@ -47,5 +54,7 @@ export const nodeClasses: Record<Terminology, { title: string; code: string[] }>
       '    }',
       '}',
     ],
+    // EXERCISES.md §0.6: "For LL-04 the panel also lists the BigNum fields".
+    ownerFields: { title: 'BigNum fields', code: ['private Node myHead;', 'private int mySize;'] },
   },
 }
