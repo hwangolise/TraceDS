@@ -111,7 +111,10 @@ regressions.
 
 ### M2 — Linked-list visualization
 Files: `tests/viz/layout.test.ts`, `tests/viz/diff.test.ts`,
-`tests/viz/describe.test.ts`, `tests/viz/LinkedListView.test.tsx`.
+`tests/viz/describe.test.ts`, `tests/viz/LinkedListView.test.tsx`,
+`tests/architecture/viz-imports.test.ts` (R3), `tests/dev/notation.test.ts`
+(the parser that supplies EXERCISES.md states to these tests), plus
+`tests/fixtures/states.ts` and `tests/setup/dom.ts` (React Flow jsdom stubs).
 
 **Expected red:** `layout`/`diff`/`describe` throw "not implemented";
 `LinkedListView` renders nothing.
@@ -135,6 +138,9 @@ Files: `tests/viz/layout.test.ts`, `tests/viz/diff.test.ts`,
 | L15 | variable removal | a variable missing from the frame → no pill (LL-02 after c8) |
 | L16 | field labels from state | a Node with field `digit` shows the caption `digit`, never `data` |
 | L17 | unspecified reference | (LL-04 after c1) `Y.myHead → ?` renders a dashed `?` marker with **no edge** and no null marker. describe() says "not shown in this exercise". A diff from `?` to a ref (c3) is reported as a change |
+| L18 | every spec state renders legibly | for all 30 EXERCISES.md LL states: boxes inside bounds, no two boxes overlap, and `fitScale(600×400) ≥ MIN_SCALE` |
+| N | notation parser | parses all 30 LL states; each is well-formed under the M1 validator with the right terminology set; spot checks against hand-written states |
+| T | text description | exact wording for empty, null, one node, temporary reference, BigNum, unspecified, unreachable, output, cycles, and multiple frames; deterministic; never mentions internal ids |
 | D1–D4 | diff (state transitions) | changed `next` field, changed `data`, changed variable target, added/removed object are each reported; identical states → empty ChangeSet |
 | R1 | component renders supplied state | given state, renders node text `4`, `7`, `null` and the sr-only description |
 | R2 | state transition re-render | rerender with the next state updates the description and adds `data-changed` on changed elements |

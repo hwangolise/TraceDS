@@ -66,6 +66,7 @@ Changes to this table need explicit human approval.
 Frontend runtime: `react`, `react-dom`, `@xyflow/react`.
 Frontend dev: `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`,
 `@tailwindcss/vite`, `vitest`, `jsdom`, `@testing-library/react`,
+`@testing-library/dom` (peer dependency of `@testing-library/react`),
 `@testing-library/user-event`, `@testing-library/jest-dom`,
 `@playwright/test`, `@axe-core/playwright` (approved Q9, dev-only, M9),
 `@types/*`, and `oxlint` (the linter shipped by the current Vite React-TS
@@ -449,6 +450,48 @@ visually hidden next to the diagram and announced on change. Playwright and
 RTL tests also use it as a stable assertion surface.
 
 ---
+
+### 6.4 Implementation notes (M2)
+
+- **Modules.** `viz/layout.ts` maps `ProgramState` to a renderer-independent
+  `VizLayout` (`viz/types.ts`): positioned boxes and edges. It has no React Flow
+  types. `viz/linkedlist/toFlow.ts` maps that onto React Flow nodes and edges,
+  and `viz/linkedlist/boxes.tsx` draws each box. `reachability.ts`, `diff.ts`,
+  and `describe.ts` are pure.
+- **Several variables on one object** sit **side by side** above it, each with
+  its own arrow, rather than stacked vertically. Stacked pills would draw
+  their arrows through each other. A slot widens to fit its pills, so nothing
+  overlaps.
+- **Variables holding `null`** get their own `null` markers on a row after the
+  object rows (rule 3). **Unreachable** objects come last.
+- **`next → null`** is a dot in the `next` cell with an arrow to a `null` box,
+  following the course drawing `[data | next] → null`.
+- **BigNum cells are drawn `[mySize | myHead]`**, so the `myHead` arrow leaves
+  from the box's right edge toward the list. Field order in state is
+  unchanged.
+- **`unspecified`** fields render as a dashed `?` *inside* their cell (with the
+  tooltip "not shown in this exercise"). There is no edge and no null marker.
+  `int` and `unspecified` variables are listed as text above the diagram.
+- **Text description wording:** `<var> refers to node k.` / `<var> is null.` /
+  `Node k has data 4, and its next refers to node j.` / `BigNum k has mySize
+  3, and its myHead refers to node j.` / `List from head: 4 → 7 → null.` /
+  `List from copy.myHead: …` / `Node k is unreachable.` / `Output: none.`
+  Objects are numbered in diagram order. Internal ids never appear.
+- **Narrow screens.** The diagram fits its panel at zoom ≤ 1 but never below
+  `MIN_SCALE` (0.8). Below that, the diagram box (not the page) scrolls
+  horizontally. Pan, zoom, and drag gestures are all disabled, so vertical
+  page scrolling is never captured.
+- **Accessibility.** The React Flow canvas is `aria-hidden`, with no focusable
+  nodes or edges and React Flow's attribution link hidden, so there is no
+  keyboard stop inside hidden content. The `<figcaption>` is the accessible
+  equivalent (`sr-only`, `aria-live="polite"`). "unreachable" and "changed"
+  are shown as text badges, not only as styling.
+- **Dev harness.** `?viz-harness` in the dev server (optionally `&only=ll04`)
+  renders every EXERCISES.md state. The states are parsed by
+  `src/dev/notation.ts` from the doc's §0.2 notation. It is gated on
+  `import.meta.env.DEV`, so it is absent from production builds (verified).
+  The dev server's `fs.allow` includes the repo root so the harness can read
+  `docs/`.
 
 ## 7. Recursion visualization (M5, design only)
 
