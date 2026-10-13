@@ -23,4 +23,49 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
+      # Serial on purpose: P4 asserts a wall-clock < 200 ms feedback latency, and
+      # parallel workers on a shared runner inflate Playwright's own click
+      # overhead (M7C). The suite is short, so serial costs little.
+      - run: npx playwright test --workers=1
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: traceds
+          POSTGRES_PASSWORD: traceds
+          POSTGRES_DB: traceds_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U traceds -d traceds_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Throwaway CI-only service container; not a real credential.
+      TEST_DATABASE_URL: postgres://traceds:traceds@localhost:5432/traceds_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go vet -tags=integration ./...
+      - run: go test -race ./...
+      - name: Integration tests (PostgreSQL 16)
+        run: go test -race -tags=integration ./...

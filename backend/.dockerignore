@@ -1,0 +1,7 @@
+# Only go.mod, go.sum, cmd/ and internal/ are needed to build the server.
+**/*_test.go
+migrations/
+Dockerfile
+.dockerignore
+.env
+.env.*

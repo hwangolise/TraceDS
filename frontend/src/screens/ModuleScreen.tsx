@@ -1,6 +1,8 @@
 // A module's exercises in order, with locally remembered completion
 // (docs/PRODUCT.md §5, decision A9).
 
+import { useEffect, useRef } from 'react'
+import { trackModuleSelected } from '../analytics/events'
 import { Layout } from '../components/Layout'
 import { RichText } from '../components/RichText'
 import { primaryButton, secondaryButton, textLink } from '../components/ui'
@@ -14,6 +16,13 @@ const firstSentence = (text: string) => text.match(/^.*?[.?!](?=\s|$)/)?.[0] ?? 
 
 export function ModuleScreen({ module }: { module: CourseModule }) {
   const completed = loadCompleted()
+  // One navigation to a module is one module_selected; the ref absorbs StrictMode's repeated effect.
+  const announced = useRef<string | null>(null)
+  useEffect(() => {
+    if (announced.current === module.id) return
+    announced.current = module.id
+    trackModuleSelected(module.id)
+  }, [module.id])
   return (
     <Layout>
       <p className="text-sm">
@@ -50,8 +59,8 @@ export function ModuleScreen({ module }: { module: CourseModule }) {
                 )}
                 {exercise ? (
                   <a href={hrefFor({ name: 'exercise', exerciseId: entry.id })} className={done ? secondaryButton : primaryButton}>
-                    {done ? 'Practice again' : 'Start'}
-                    <span className="sr-only"> {entry.id}</span>
+                    {done ? 'Practice again' : 'Start'}{' '}
+                    <span className="sr-only">{entry.id}</span>
                   </a>
                 ) : (
                   <span className="text-sm font-medium text-slate-600">Coming next</span>

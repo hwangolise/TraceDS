@@ -1,7 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { startAnalytics } from './analytics/events.ts'
 import App from './App.tsx'
+
+// Composition root: register the anonymous session and record the page load
+// before rendering. Never throws and never waits (ADR-7).
+startAnalytics()
 
 const root = createRoot(document.getElementById('root')!)
 

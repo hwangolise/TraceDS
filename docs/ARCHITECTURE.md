@@ -659,7 +659,13 @@ mobile work?" without fingerprinting.
   duplicate within a batch is stored and counted once, and an id already
   stored under another session is neither duplicated nor re-owned. Events are
   inserted **in batch order**, and `seq` (`bigint generated always as
-  identity`) records deterministic persistence order.
+  identity`) records server persistence order. Order is guaranteed only
+  within a batch. Independently delivered (or retried) batches may be
+  persisted in any order (ANALYTICS §4).
+- Every store call runs under a ~10 s timeout derived from the request
+  context (client cancellation still applies). A stalled database therefore
+  ends in the generic `500 {"error":"internal error"}`, which the client
+  retries. The timeout cause is logged server-side only.
 - The response is `202 {"accepted": n}`, where `n` is the number of **new**
   rows (duplicates are not counted). If any event fails validation, the whole
   batch gets 400 and nothing is stored, and the client drops it rather than
@@ -688,7 +694,7 @@ create table sessions (
 
 create table events (
   id               uuid primary key,                       -- client event_id (idempotency)
-  seq              bigint generated always as identity,    -- storage order (batch order preserved)
+  seq              bigint generated always as identity,    -- server persistence order (tracked order within a batch)
   session_id       uuid not null references sessions(id),
   run_id           uuid,                                   -- one exercise attempt-through
   event_type       text not null check (event_type in (
@@ -786,9 +792,10 @@ because prepared statements are not supported in transaction mode.
 - **Database:** Supabase project. Apply `migrations/*.sql` once, with psql.
 - **CI (`.github/workflows/ci.yml`)**, on every push and PR:
   frontend `typecheck`, `lint`, `vitest run`, `build`, and Playwright (against
-  `vite preview`, backend mocked through route interception); backend
-  `go vet` and `go test ./...` with a `postgres:16` service container for
-  store integration tests.
+  `vite preview`, backend mocked through route interception; run serially with
+  `--workers=1` because P4 asserts wall-clock latency, M7C); backend `gofmt`
+  check, `go vet` (default and `integration` tags), `go test -race ./...`, and
+  the `-tags=integration` tests against a `postgres:16` service container.
 
 ---
 

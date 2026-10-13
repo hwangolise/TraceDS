@@ -1,6 +1,12 @@
 // Fire-and-forget analytics delivery (docs/ANALYTICS.md §4, docs/ARCHITECTURE.md §8).
 //
-// M7A stub: types and signatures only.
+// An in-memory queue flushed when it holds 10 events, every 5 s, or when the
+// page is hidden. Failed requests (network error or 5xx) are retried twice
+// (after 1 s, then 3 s) with the identical payload, then dropped; 4xx is
+// dropped at once. Nothing here throws or returns a promise: callers never wait
+// on analytics.
+
+import { newUuid } from './uuid'
 
 export type EventType =
   | 'session_started'
@@ -31,12 +37,114 @@ export interface ClientConfig {
   sessionId: string
 }
 
+/** Optional metadata sent with the one-time session registration. */
+export interface SessionMeta {
+  app_version?: string
+  viewport?: 'narrow' | 'wide'
+}
+
 export interface AnalyticsClient {
   /** Queue an event. Never throws, never blocks. */
   track(event: TrackedEvent): void
+  /** POST /api/v1/sessions once. Best effort: failures are ignored. */
+  registerSession(meta: SessionMeta): void
+}
+
+const FLUSH_AT = 10
+const FLUSH_INTERVAL_MS = 5_000
+const MAX_BATCH = 50
+const RETRY_DELAYS_MS = [1_000, 3_000]
+
+type WireEvent = TrackedEvent & { event_id: string; client_ts: string }
+
+const NOOP_CLIENT: AnalyticsClient = { track() {}, registerSession() {} }
+
+/** Drops undefined/null members: the API treats absent as omitted and rejects explicit null. */
+function compact<T extends object>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)) as T
 }
 
 export function createAnalyticsClient(config: ClientConfig): AnalyticsClient {
-  void config
-  throw new Error('not implemented')
+  const base = (config.baseUrl ?? '').trim().replace(/\/+$/, '')
+  if (!base) return NOOP_CLIENT
+
+  // Bind the transport once: a client's retries stay with the fetch it started
+  // with, and a platform without fetch simply disables analytics.
+  const boundFetch = typeof fetch === 'function' ? fetch.bind(globalThis) : undefined
+  if (!boundFetch) return NOOP_CLIENT
+  const doFetch = boundFetch
+
+  const eventsUrl = `${base}/api/v1/events`
+  const sessionsUrl = `${base}/api/v1/sessions`
+  let queue: WireEvent[] = []
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  /** One POST. Resolves to true when it should not be retried. Never rejects. */
+  async function post(url: string, body: string): Promise<boolean> {
+    try {
+      const response = await doFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      })
+      return response.status < 500
+    } catch {
+      return false
+    }
+  }
+
+  function deliver(body: string, attempt = 0): void {
+    void post(eventsUrl, body)
+      .then((done) => {
+        if (done || attempt >= RETRY_DELAYS_MS.length) return
+        setTimeout(() => deliver(body, attempt + 1), RETRY_DELAYS_MS[attempt])
+      })
+      .catch(() => {})
+  }
+
+  function flush(): void {
+    try {
+      if (timer !== undefined) {
+        clearTimeout(timer)
+        timer = undefined
+      }
+      while (queue.length > 0) {
+        const events = queue.slice(0, MAX_BATCH)
+        queue = queue.slice(MAX_BATCH)
+        deliver(JSON.stringify({ session_id: config.sessionId, events }))
+      }
+    } catch {
+      queue = []
+    }
+  }
+
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') flush()
+  }
+  try {
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+  } catch {
+    // no DOM: the timer and size triggers still work
+  }
+
+  return {
+    track(event) {
+      try {
+        queue.push({ ...compact(event), event_id: newUuid(), client_ts: new Date().toISOString() })
+        if (queue.length >= FLUSH_AT) flush()
+        else if (timer === undefined) timer = setTimeout(flush, FLUSH_INTERVAL_MS)
+      } catch {
+        // analytics must never affect the app
+      }
+    },
+    registerSession(meta) {
+      try {
+        void post(sessionsUrl, JSON.stringify({ session_id: config.sessionId, ...compact(meta) })).catch(() => {})
+      } catch {
+        // ignore
+      }
+    },
+  }
 }

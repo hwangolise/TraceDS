@@ -253,7 +253,7 @@ green:** B11, U1, and F-A14 (static regression guards).
 | PG1 | Ping | succeeds against a migrated database |
 | PG2 | CreateSession upsert | created → true, repeat → false; known values kept; null values filled by a later call |
 | PG3 | optional fields | absent metadata stored as NULL |
-| PG4 | InsertEvents fields and order | every field preserved (read back with SQL); `order by seq` equals batch order within and across batches |
+| PG4 | InsertEvents fields and order | every field preserved (read back with SQL); `order by seq` equals batch order within a batch and across *sequential* `InsertEvents` calls (server persistence order; cross-batch delivery order is not guaranteed, ANALYTICS §4) |
 | PG5 | session upsert and enrichment | InsertEvents creates a missing session; keeps an existing one; a later CreateSession enriches it without changing `created_at`; both orders converge |
 | PG6 | idempotency and count | returns new-row counts 1, 0, 1 for first delivery / identical retry / retry plus a new event; a duplicate id within one call is stored and counted once; an id already stored under another session → 0, ownership unchanged |
 | PG7 | session ownership | events stored under the given session id |

@@ -102,13 +102,20 @@ Notes:
   under a different `session_id` is not duplicated, its original session
   ownership is unchanged, and it is not counted as accepted. No error is
   returned in either case.
-- **Order is preserved.** The client sends events in the order they were
-  tracked. The backend stores a batch in its order, and `events.seq`
-  (assigned at insert) records storage order across batches. Analysis that
-  needs sequence (for example `answer_submitted`, `hint_shown`,
-  `answer_submitted`, `exercise_completed`) orders by `seq`. `created_at` is
-  transaction time and ties within a batch, and `client_ts` can tie within a
-  millisecond, so neither is used for ordering.
+- **Order is preserved within a batch, not across batches** (M7C decision).
+  The client puts events into a batch in the order they were tracked, and the
+  backend stores a batch in that order. Batches are delivered independently,
+  so a retried batch can be stored after a later one. Persistence order
+  across batches is **not** guaranteed.
+  - `events.seq` (assigned at insert) is **server persistence order**. Within
+    one batch it equals tracked order.
+  - `client_ts` is **client occurrence time** (the browser clock when the
+    event was tracked). It can tie within a millisecond.
+  - `created_at` is server transaction time and ties within a batch.
+  - **No launch query may assume global cross-batch ordering.** Q1–Q7 are
+    order-independent counts. A future sequence analysis must account for
+    cross-batch reordering, for example by ordering within a `run_id` by
+    `client_ts` and then `seq`, and must state that assumption.
 - If `/sessions` fails, `/events` still succeeds, because the events endpoint
   upserts the session.
 - **Either order converges.** `/events` may arrive before `/sessions` and

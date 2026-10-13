@@ -5,6 +5,7 @@
 // state transition comes from the engine; this screen only displays the run.
 
 import { useEffect, useRef, useState } from 'react'
+import { trackExerciseStarted, trackOutcome } from '../analytics/events'
 import { CodePanel } from '../components/CodePanel'
 import { FeedbackPanel } from '../components/FeedbackPanel'
 import { OutputPanel } from '../components/OutputPanel'
@@ -27,6 +28,7 @@ export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
   const [run, setRun] = useState(() => startRun(exercise))
   const [selected, setSelected] = useState<string | null>(null)
   const pendingFocus = useRef<PendingFocus>(null)
+  const runAnnounced = useRef(false)
   const feedbackRef = useRef<HTMLDivElement>(null)
   const continueRef = useRef<HTMLButtonElement>(null)
   const legendRef = useRef<HTMLLegendElement>(null)
@@ -58,10 +60,18 @@ export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
     }
   }, [run])
 
+  // One mount is one run. The ref keeps StrictMode's repeated effect from announcing it twice.
+  useEffect(() => {
+    if (runAnnounced.current) return
+    runAnnounced.current = true
+    trackExerciseStarted(exercise)
+  }, [exercise])
+
   const check = () => {
     if (!selected) return
     const { run: next, outcome } = submitAnswer(exercise, run, selected)
     if (outcome.type === 'rejected') return
+    trackOutcome(exercise, outcome)
     pendingFocus.current = outcome.type === 'correct' ? 'continue' : 'hint'
     setSelected(null)
     setRun(next)
@@ -80,6 +90,7 @@ export function ExerciseScreen({ exercise, onComplete }: ExerciseScreenProps) {
   const restart = () => {
     setSelected(null)
     setRun(restartRun(exercise))
+    trackExerciseStarted(exercise)
   }
 
   return (
