@@ -13,7 +13,8 @@ Related: [EXERCISES.md](EXERCISES.md) ·
 
 | Layer | Tool | Command |
 |---|---|---|
-| Engine, viz pure functions, analytics client, content | Vitest (`jsdom` env only where DOM is needed) | `cd frontend && npm test` (`vitest run`) |
+| Engine, viz pure functions, analytics client, content | Vitest (`node` env by default; `jsdom` only where DOM is needed) | `cd frontend && npm test` (`vitest run`) |
+| Types / lint | `tsc -b` (app, node, and tests projects) / oxlint | `npm run typecheck` / `npm run lint` |
 | React components | Vitest + React Testing Library + user-event + jest-dom | same |
 | Go handlers / validation | `go test` + `net/http/httptest` + `store.Memory` fake | `cd backend && go test ./...` |
 | Go Postgres store, migrations, analytics queries | `go test` against real Postgres (build tag `integration`, `TEST_DATABASE_URL`) | `go test -tags=integration ./...` |
@@ -74,10 +75,14 @@ No code tests. Gate: human review of the docs.
 
 ### M1 — Exercise domain model and deterministic engine
 Files: `tests/engine/engine.test.ts`, `tests/engine/validate.test.ts`,
-`tests/fixtures/miniExercise.ts`, `tests/architecture/imports.test.ts`.
+`tests/fixtures/miniExercise.ts`, `tests/architecture/imports.test.ts`,
+`tests/content/catalog.test.ts`.
 
 **Expected red:** `startRun`/`submitAnswer`/`continueRun`/`restartRun`/
-`validateExercise` throw "not implemented".
+`validateExercise` throw "not implemented". The catalog-transcription tests
+fail on assertions while `content/catalog.ts` is an empty stub. A1 is green
+from the start, because the stubs are already pure; it guards against
+regressions.
 
 | # | Test | Asserts |
 |---|---|---|
@@ -101,7 +106,8 @@ Files: `tests/engine/engine.test.ts`, `tests/engine/validate.test.ts`,
 | E18 | unchanged-state checkpoint allowed | fixture checkpoint with `resultState` equal to the prior state advances normally |
 | V1–V15 | malformed exercises rejected | one test per malformation (covering every rule) in ARCHITECTURE §4.4: missing id; zero checkpoints; duplicate checkpoint id; bad checkpoint id format; < 2 or > 4 choices; duplicate choice id; `correctChoiceId` not in choices; correct choice has misconception; incorrect choice missing hint; line out of range / empty lines; dangling ref target; duplicate object id; malformed Node fields; **mixed terminology sets** (a `generic-node` exercise with a `digit` field or a BigNum object, or a `bignum-node` exercise with a `data` field); unknown concept/misconception id. Each asserts `ok: false` and a specific error message substring |
 | V16 | valid fixture accepted | `ok: true`. The fixture includes an `unspecified` field value, which is accepted |
-| A1 | engine purity | `src/engine/**` imports nothing from `react`, `viz`, `analytics`, `content` (static import scan) |
+| A1 | engine purity | static scan of `src/engine/**`: only sibling `./` imports (so no `react`, `viz`, `analytics`, `content`, or packages), and no `Date`, `Math.random`, `crypto`, `fetch`, storage, DOM, timers, or `async`/`Promise`. The oxlint `no-restricted-imports` override enforces the same import boundary at lint time |
+| CAT | catalog transcription | `content/catalog.ts` concepts and misconceptions equal the EXERCISES.md §0.4/§0.5 tables (parsed from the doc), in order, unique |
 
 ### M2 — Linked-list visualization
 Files: `tests/viz/layout.test.ts`, `tests/viz/diff.test.ts`,

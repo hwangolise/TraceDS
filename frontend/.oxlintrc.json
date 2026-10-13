@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  },
+  "overrides": [
+    {
+      "files": ["src/engine/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "react", "message": "engine/ must not depend on React (ARCHITECTURE §3)." },
+              { "name": "react-dom", "message": "engine/ must not depend on React (ARCHITECTURE §3)." }
+            ],
+            "patterns": [
+              { "group": ["**/viz", "**/viz/**"], "message": "engine/ must not import viz (ARCHITECTURE §3)." },
+              { "group": ["**/analytics", "**/analytics/**"], "message": "engine/ must not import analytics (ARCHITECTURE §3)." },
+              { "group": ["**/content", "**/content/**"], "message": "engine/ must not import content (ARCHITECTURE §3)." },
+              { "group": ["**/components/**", "**/screens/**"], "message": "engine/ must not import UI code (ARCHITECTURE §3)." }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

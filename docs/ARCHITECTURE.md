@@ -67,8 +67,9 @@ Frontend runtime: `react`, `react-dom`, `@xyflow/react`.
 Frontend dev: `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`,
 `@tailwindcss/vite`, `vitest`, `jsdom`, `@testing-library/react`,
 `@testing-library/user-event`, `@testing-library/jest-dom`,
-`@playwright/test`, `@axe-core/playwright` (approved Q9, dev-only, M9), and the
-ESLint packages from the Vite template.
+`@playwright/test`, `@axe-core/playwright` (approved Q9, dev-only, M9),
+`@types/*`, and `oxlint` (the linter shipped by the current Vite React-TS
+template; it replaces the ESLint packages the template used to include).
 Backend: `github.com/jackc/pgx/v5` only. UUID format validation uses a small
 standard-library helper (regex); no UUID package.
 
@@ -105,8 +106,9 @@ standard-library helper (regex); no UUID package.
 └── .github/workflows/        # ci.yml
 ```
 
-**Dependency direction (enforced by review, and by an ESLint
-`no-restricted-imports` rule in M1):**
+**Dependency direction (enforced by review, by the oxlint
+`no-restricted-imports` override for `src/engine/**` in `.oxlintrc.json`, and
+by the A1 static-scan test):**
 
 ```
 content ──▶ engine/types
@@ -235,7 +237,8 @@ startRun(ex: Exercise): ExerciseRun
 submitAnswer(ex: Exercise, run: ExerciseRun, choiceId: string): { run: ExerciseRun; outcome: Outcome }
 continueRun(ex: Exercise, run: ExerciseRun): ExerciseRun
 restartRun(ex: Exercise): ExerciseRun        // identical to startRun
-validateExercise(input: unknown): { ok: true; exercise: Exercise } | { ok: false; errors: string[] }
+validateExercise(input: unknown, catalog: Catalog): { ok: true; exercise: Exercise } | { ok: false; errors: string[] }
+// Catalog = { concepts: readonly string[]; misconceptions: readonly string[] }, from content/catalog.ts
 ```
 
 **State machine**
@@ -283,10 +286,14 @@ exercise shows a friendly "This exercise is unavailable" message instead of
 crashing. Rules:
 
 1. `id`, `moduleId`, `title`, and `objective` are non-empty. `code.length ≥ 1`.
+   The exercise `id` matches `/^[A-Z]{2,3}-\d{2}$/` (`LL-01`). `terminology`
+   and `visualization` are among their allowed values.
 2. `checkpoints.length ≥ 1`. Checkpoint ids are unique and match
-   `/^[a-z]{2,3}\d{2}-c\d+$/`.
-3. Each checkpoint has 2–4 choices with unique ids. `correctChoiceId` is one of
-   them.
+   `/^[a-z]{2,3}\d{2}-c\d+$/`. They are also prefixed by the exercise id,
+   lower-cased without the hyphen (`LL-01` → `ll01-`).
+3. Each checkpoint has 2–4 choices with unique ids. The ids are `a`, `b`, `c`,
+   `d` in display order (EXERCISES §0.1). `correctChoiceId` is one of them.
+   Every choice has non-empty text.
 4. The correct choice has **no** misconception. Every incorrect choice has a
    misconception with a non-empty `id` and `hint`.
 5. Every number in `lines` is within `1..code.length`, and `lines` is
@@ -302,7 +309,32 @@ crashing. Rules:
    exist. In a `bignum-node` exercise, every Node's first field is `digit`.
    A mismatch is rejected.
 9. Misconception ids and concept ids exist in the catalogs
-   (`content/catalog.ts`, transcribed from EXERCISES §0.4–0.5).
+   (`content/catalog.ts`, transcribed from EXERCISES §0.4–0.5). The catalog is
+   **passed in by the caller** (`validateExercise(input, catalog)`), because
+   `engine/` must not import `content/` (§3).
+
+The validator accepts arbitrary input, never throws, and returns **every**
+error it finds, each prefixed with its location (for example
+`ll01-c3 resultState: …`).
+
+### 4.5 Implementation notes (M1)
+
+- **Immutability.** Engine functions never mutate the exercise or the run
+  they're given. They return new objects. Program states are copied with
+  `structuredClone` when they enter a run (from `initialState` or a
+  `resultState`), so content objects are never shared with run state. After
+  that, states are treated as immutable values, so `previousState` may share
+  a reference with the earlier run's `state`.
+- **Rejection precedence** in `submitAnswer`: `not-in-question-phase`, then
+  `unknown-choice`, then `already-eliminated`. A rejected submission returns
+  the run unchanged.
+- **`attempt` and `eliminated` during `explanation`.** They keep their values
+  so the UI can still show which choices were tried. `continueRun` resets
+  them to `0` and `[]`.
+- **`StepResult.hintsShown`** is derived from the eliminated choices'
+  misconception ids, in the order they were tried.
+- **`continueRun`** in the `question` or `complete` phase returns the run
+  unchanged.
 
 ---
 

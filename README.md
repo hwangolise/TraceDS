@@ -12,8 +12,9 @@ change and explains why it happened. There is no signup.
 
 ## Status
 
-**M0 (specification) has been reviewed, and the review decisions are
-applied.** No application code exists yet. The launch release is the
+**M0 (specification) and M1 (exercise engine) are approved. M2
+(linked-list visualization) is in progress.** `frontend/` contains the pure
+exercise engine and its tests. There is no exercise UI yet. The launch release is the
 linked-list MVP. Recursion follows after launch.
 
 ## V1 content
