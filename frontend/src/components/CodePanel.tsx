@@ -40,7 +40,7 @@ export function CodePanel({ code, highlighted, mode, focus, terminology }: CodeP
   const nodeClass = nodeClasses[terminology]
   return (
     <div>
-      <ol aria-label="Java code" className="relative overflow-x-auto rounded-md border border-slate-200 bg-slate-50 py-2 font-mono text-[14px] leading-6">
+      <ol aria-label="Java code" tabIndex={0} className="relative overflow-x-auto rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 border border-slate-200 bg-slate-50 py-2 font-mono text-[14px] leading-6">
         {code.map((line, i) => {
           const n = i + 1
           const current = highlighted.includes(n)
@@ -51,7 +51,7 @@ export function CodePanel({ code, highlighted, mode, focus, terminology }: CodeP
               aria-current={current ? 'step' : undefined}
               className={`flex min-w-max items-center border-l-4 pr-3 ${current ? 'border-indigo-600 bg-indigo-50' : 'border-transparent'}`}
             >
-              <span aria-hidden="true" className="w-9 shrink-0 select-none pr-3 text-right text-slate-400">
+              <span aria-hidden="true" className="w-9 shrink-0 select-none pr-3 text-right text-slate-600">
                 {n}
               </span>
               <code className="whitespace-pre text-slate-900">

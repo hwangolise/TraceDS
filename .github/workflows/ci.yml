@@ -22,6 +22,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm run check:bundle
       - run: npx playwright install --with-deps chromium
       # Serial on purpose: P4 asserts a wall-clock < 200 ms feedback latency, and
       # parallel workers on a shared runner inflate Playwright's own click
