@@ -149,7 +149,17 @@ Files: `tests/viz/layout.test.ts`, `tests/viz/diff.test.ts`,
 ### M3 — LL-01 and LL-02 (and the exercise screen)
 Files: `tests/content/ll01.test.ts`, `tests/content/ll02.test.ts`,
 `tests/content/contentTable.test.ts`, `tests/screens/ExerciseScreen.test.tsx`,
-`tests/screens/Landing.test.tsx`, `e2e/exercise-flow.spec.ts`.
+`tests/screens/App.test.tsx` (landing, module, flow, completion, re-entry;
+replaces the planned `Landing.test.tsx`), `tests/screens/navigation.test.ts`
+(router, modules, next exercise, completion storage),
+`tests/components/javaTokens.test.ts`, `tests/architecture/ui-logic.test.ts`
+(U1: the UI never reads `correctChoiceId` or misconceptions), and
+`e2e/exercise-flow.spec.ts` (P1, plus a page-level no-horizontal-scroll check).
+Verbatim checks read the doc via `tests/fixtures/docContent.ts`.
+
+E2E runs Chromium at 1440×900 (desktop) and Pixel 7 emulation (mobile).
+Locally it uses the installed Google Chrome (`channel: 'chrome'`); CI installs
+Playwright's Chromium. A WebKit mobile profile is deferred to M9.
 
 **Expected red:** the content modules export nothing or a placeholder that
 fails validation; screens are missing.

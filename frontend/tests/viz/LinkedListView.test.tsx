@@ -60,6 +60,13 @@ describe('LinkedListView', () => {
     expect(within(diagram()).getAllByText('changed').length).toBeGreaterThan(0)
   })
 
+  it('an empty state says so in text and does not mount the diagram (it would measure a hidden, zero-size container)', () => {
+    render(<LinkedListView state={docState('ll01-initial')} />)
+    expect(screen.getByText('Nothing in memory yet.')).toBeTruthy()
+    expect(figure().querySelector('[data-testid="ll-diagram"]')).toBeNull()
+    expect(description().textContent).toBe('No variables yet. Output: none.')
+  })
+
   it('the diagram is hidden from assistive technology; the description is announced', () => {
     render(<LinkedListView state={docState('ll01-c2')} />)
     expect(diagram().getAttribute('aria-hidden')).toBe('true')

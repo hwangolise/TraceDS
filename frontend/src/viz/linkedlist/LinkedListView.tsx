@@ -67,6 +67,14 @@ export function LinkedListView({ state, previousState = null }: LinkedListViewPr
           ))}
         </ul>
       )}
+      {viz.boxes.length === 0 && (
+        <p aria-hidden="true" className="py-6 text-center text-sm text-slate-500">
+          Nothing in memory yet.
+        </p>
+      )}
+      {/* Mounted only when there is something to draw, so React Flow always
+          measures a visible container (a display:none container measures 0). */}
+      {viz.boxes.length > 0 && (
       <div data-testid="ll-diagram" aria-hidden="true" className="overflow-x-auto overflow-y-hidden">
         <div style={{ minWidth, height: Math.max(height, 2 * FIT_PADDING + 28) }}>
           <ReactFlow
@@ -94,6 +102,7 @@ export function LinkedListView({ state, previousState = null }: LinkedListViewPr
           </ReactFlow>
         </div>
       </div>
+      )}
       <figcaption className="sr-only" aria-live="polite">
         {description}
       </figcaption>

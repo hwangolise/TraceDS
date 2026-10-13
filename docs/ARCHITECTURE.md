@@ -68,7 +68,7 @@ Frontend dev: `vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`,
 `@tailwindcss/vite`, `vitest`, `jsdom`, `@testing-library/react`,
 `@testing-library/dom` (peer dependency of `@testing-library/react`),
 `@testing-library/user-event`, `@testing-library/jest-dom`,
-`@playwright/test`, `@axe-core/playwright` (approved Q9, dev-only, M9),
+`@testing-library/user-event`, `@playwright/test`, `@axe-core/playwright` (approved Q9, dev-only, M9),
 `@types/*`, and `oxlint` (the linter shipped by the current Vite React-TS
 template; it replaces the ESLint packages the template used to include).
 Backend: `github.com/jackc/pgx/v5` only. UUID format validation uses a small
@@ -389,6 +389,47 @@ Desktop (≥ 1024px)                               Mobile (< 1024px)
 Visualization components **render supplied state**. They receive
 `ProgramState` (and optionally `previousState`). They don't know about
 checkpoints, choices, correctness, or exercises.
+
+### 5.4 Implementation notes (M3)
+
+- **Content format.** `content/ll01.ts` and `ll02.ts` are verbatim
+  transcriptions of EXERCISES.md, built with the small data builders in
+  `content/build.ts`. Text keeps the doc's inline markdown (`` `code` `` and
+  `*emphasis*`), which `components/RichText.tsx` renders. Tests compare every
+  string to the doc, and every state to the M2 notation parser.
+- **Registry and modules.** `content/index.ts` holds exercises that have
+  content. `content/modules.ts` lists LL-01..LL-04, so LL-03 and LL-04 show
+  "Coming next" until M4 adds their content. Recursion is not listed.
+- **No correctness logic in the UI.** Screens show the engine's run
+  (`feedback`, `eliminated`, `results`). They never read `correctChoiceId`
+  or misconceptions from content, and test U1 enforces this. The chosen
+  answer shown as "✓ Correct" during review comes from
+  `run.feedback.choiceId`.
+- **Review phase.** During `explanation`, the screen keeps showing the
+  answered checkpoint: its step number, its question (locked), and its lines
+  marked "ran". The diagram shows `run.state` with `previousState`
+  highlighting. Continue moves on.
+- **Focus.** A wrong answer moves focus to the hint. A correct answer moves
+  it to Continue. Continue moves it to the next question's legend, and a
+  route change moves it to the page `h1`. On screens narrower than 1024 px, a
+  correct answer also scrolls the memory panel into view (Continue keeps
+  focus without scrolling), so the student sees the change first.
+- **Completion.** The completion route (`#/x/<id>/done`) reads results kept in
+  App memory. Without them it redirects to the exercise. Re-entering an
+  exercise always starts a fresh run at step 1, because in-progress runs are
+  not persisted. Completion is stored in `localStorage['traceds.completed']`
+  (A9), with every access guarded.
+- **"Practice another exercise"** goes to the next available exercise in
+  module order (wrapping around) that isn't completed yet, otherwise the next
+  available one, otherwise the module page.
+- **Layout.** `lg` (≥ 1024 px) uses two equal columns (code | memory), with
+  the question below. The course's one-line `for` header must fit unwrapped
+  in the code column. Below that width, panels stack. The page itself never
+  scrolls horizontally (E2E test). Wide code lines scroll inside the code
+  panel, and wide diagrams scroll inside the diagram box (M2 behavior).
+- **Empty memory** shows the text "Nothing in memory yet." and does not mount
+  React Flow. A hidden container measures 0 px, which broke the first real
+  render on phones.
 
 ---
 

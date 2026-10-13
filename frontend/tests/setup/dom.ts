@@ -37,3 +37,10 @@ if (typeof window !== 'undefined') {
   ;(window.SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
     ({ x: 0, y: 0, width: 0, height: 0 }) as DOMRect
 }
+
+// jsdom lacks CSS.escape, which user-event uses for arrow-key navigation in
+// radio groups. Minimal polyfill (identifier escaping is all it needs here).
+if (typeof window !== 'undefined' && !(globalThis as { CSS?: { escape?: unknown } }).CSS?.escape) {
+  const escape = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`)
+  Object.assign(globalThis, { CSS: { ...(globalThis as { CSS?: object }).CSS, escape } })
+}
