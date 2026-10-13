@@ -26,8 +26,10 @@ The CI workflow runs all of these on every push (ARCHITECTURE §11).
 
 1. Write the milestone's tests (§4) **first**.
 2. Add the **minimal stubs** needed for the tests to compile: exported
-   functions and types whose bodies are `throw new Error('not implemented')`,
-   or for Go `panic("not implemented")` / `http.NotFound`. This makes tests
+   functions and types whose bodies are `throw new Error('not implemented')`.
+   For Go, return an explicit `errors.New("not implemented")` or a 501
+   response rather than panicking, because a panic aborts the whole test
+   binary and hides the rest of the red run (approved in M7A). This makes tests
    fail on *assertions or not-implemented errors*, not on import or compile
    errors. A failure for an unexpected reason (typo, bad import) doesn't count
    as red.
@@ -153,7 +155,8 @@ Files: `tests/content/ll01.test.ts`, `tests/content/ll02.test.ts`,
 replaces the planned `Landing.test.tsx`), `tests/screens/navigation.test.ts`
 (router, modules, next exercise, completion storage),
 `tests/components/javaTokens.test.ts`, `tests/architecture/ui-logic.test.ts`
-(U1: the UI never reads `correctChoiceId` or misconceptions), and
+(U1: the UI never reads `correctChoiceId` or misconceptions; its analytics
+boundary was redefined in M7), and
 `e2e/exercise-flow.spec.ts` (P1, plus a page-level no-horizontal-scroll check).
 Verbatim checks read the doc via `tests/fixtures/docContent.ts`.
 
@@ -205,41 +208,73 @@ Additional:
 | P2 | E2E LL-04 | complete LL-04 including one `shallow-head` wrong attempt; the copy row is visible |
 
 ### M7 — Backend and PostgreSQL analytics
-Go files: `internal/api/*_test.go`, `internal/store/postgres_test.go`
-(integration), `internal/store/queries_test.go` (integration).
-Frontend files: `tests/analytics/*.test.ts`,
-`tests/screens/ExerciseScreen.analytics.test.tsx`,
-`e2e/analytics-offline.spec.ts`.
+HTTP scope: `GET /api/v1/health`, `POST /api/v1/sessions`, `POST /api/v1/events`
+only. `POST /api/v1/feedback` is M8 (FB1–FB7).
 
-**Expected red:** handlers return 404 or 501; store methods panic "not
-implemented"; the analytics client functions are stubs.
+Go files: `internal/api/*_test.go` (B1–B12, against `store.Memory`),
+`internal/store/migrations_test.go` (M-1..M-6), `internal/store/postgres_test.go`
+(PG1–PG7), `internal/store/queries_test.go` (Q1–Q7). The last three are
+integration tests (`-tags=integration`, `TEST_DATABASE_URL`), and each test
+gets its own throwaway schema (`testdb_test.go`).
+Frontend files: `tests/analytics/{session,client,bootstrap}.test.ts(x)`,
+`tests/screens/ExerciseScreen.analytics.test.tsx`,
+`tests/screens/App.analytics.test.tsx`,
+`tests/architecture/{ui-logic,analytics-imports}.test.ts` (U1, F-A14),
+`tests/fixtures/analyticsWire.ts` (fetch stub plus page-hide flush; tests
+observe the network boundary), `e2e/analytics-offline.spec.ts` (P3, P4). The
+E2E build sets `VITE_API_BASE_URL` to a closed local port, so P3/P4 exercise
+real analytics.
+
+**Expected red:** the router returns 501; store methods return "not
+implemented" errors; the migration is an empty placeholder; the analytics
+modules throw "not implemented" and nothing is wired. **Legitimate early
+green:** B11, U1, and F-A14 (static regression guards).
 
 | # | Test | Asserts |
 |---|---|---|
-| B1 | health | `GET /api/v1/health` → 200 `{status:"ok"}`; `database:"unavailable"` when Ping fails |
-| B2 | anonymous session creation | POST valid → 201; repeat → 200; row exists |
-| B3 | session validation | bad UUID → 400; unknown field (e.g. `email`) → 400 |
-| B4 | events recorded correctly | a valid batch → 202 `{accepted:n}`; stored rows match each field |
-| B5 | events upsert session | events for an unknown session id → 202 and the session row is created |
-| B6 | event idempotency | the same `event_id` twice → one row |
-| B7 | event validation | unknown `event_type`, missing R field, present — field, attempt 0 or 11, bad id pattern, > 50 events, body > 64 KiB → 400 |
-| B8 | no PII required | every endpoint succeeds with only the documented fields; request structs contain no name/email/student-id fields; unknown `name`/`email` fields → 400 |
-| B9 | CORS | allowed origin → ACAO header set; other origin → no header; OPTIONS preflight → 204 |
-| B10 | method routing | wrong method → 405 |
-| Q1–Q7 | launch queries | seed fixed events, run each ANALYTICS §6 query, assert exact numbers |
-| M-1 | migration applies | `0001_init.sql` applies cleanly to an empty DB; RLS is enabled on all three tables |
-| F-A1 | session id persisted | the first call generates and stores the id; the second call returns the same id |
-| F-A2 | storage unavailable | `localStorage` throws → an in-memory id, no throw |
-| F-A3 | attempt numbers correct | the screen emits `answer_submitted` with `attempt_number` 1, 2 for wrong→right, and resets to 1 on the next step and on restart |
-| F-A4 | completion recorded once | a golden run emits exactly one `exercise_completed`; restart plus a second completion emits a second one with a different `run_id` |
-| F-A5 | event payload shape | each event type carries exactly its R/O fields per ANALYTICS §3 |
-| F-A6 | hint_shown paired with incorrect | each incorrect submission emits one `hint_shown` with the matching misconception and concept |
-| F-A7 | batching and flush | 10 events trigger a flush; the timer flushes; page-hide flushes with `keepalive` |
-| F-A8 | retry then drop | 5xx retried twice then dropped; 4xx dropped immediately; no unhandled rejections |
-| F-A9 | analytics failure does not break learning | the analytics client throws synchronously on every call → the full LL-01 golden path still completes in RTL |
-| F-A10 | no-op without base URL | `VITE_API_BASE_URL` unset → no fetch calls |
-| P3 | E2E offline analytics | Playwright `route('**/api/**', r => r.abort())` → complete LL-01 end to end, with no error UI |
-| P4 | E2E slow analytics | API responds after 10 s → answer feedback still appears in < 200 ms |
+| B1 | health | `GET /api/v1/health` → 200 exactly `{status:"ok",database:"ok"}`; `database:"unavailable"` (still 200) when Ping fails |
+| B2 | anonymous session creation | POST valid → 201 `{session_id}`; repeat → 200; exactly one row; only `session_id` is enough; a repeat never overwrites known metadata |
+| B3 | session validation | malformed/empty/array/null body, missing/empty/bad UUID, **invalid viewport**, wrong types, unknown or PII fields → 400 with the error envelope, nothing stored; body > 64 KiB → **413** with the envelope (a 60 KiB control → 201) |
+| B4 | events recorded correctly | each type accepted with only its R fields; O fields accepted; stored rows match every field (incl. `client_ts`; `toISOString()`, no-fraction, and numeric-offset RFC 3339 accepted); events belong to the batch session; 50 events accepted; `{accepted:n}` = new rows; **batch order preserved** in storage |
+| B5 | events upsert and session enrichment | events for an unknown session create it; a later `/sessions` → 200 and fills missing `app_version`/`viewport` without a second row; `/sessions→/events` and `/events→/sessions` converge to equal rows; known metadata is never replaced |
+| B6 | event idempotency | the same batch twice → one row per event; identical retry → `{accepted:0}`; 2 duplicates + 1 new → `{accepted:1}`; a completion delivered 3× is stored once; the same `event_id` twice in one batch → one row, `{accepted:1}`; a stored `event_id` resent under another session → `{accepted:0}`, ownership unchanged |
+| B7 | event validation | unknown/miscased `event_type`; each missing R field; each R field `null`; each present — field **and each — field set to `null`**; each O field set to `null`; `client_ts` missing, `null`, or malformed; bad UUIDs; attempt 0/11/−1/1.5/"1"; bad id patterns; unknown/PII fields; 0 or 51 events; one bad event → 400 and nothing stored; body > 64 KiB → **413** with the envelope |
+| B8 | no PII required | every M7 endpoint succeeds with only documented fields; IP and user-agent headers are never stored |
+| B9 | CORS | allowed origin → ACAO set; preflight → 204 with POST and Content-Type allowed; other origin (request or preflight) → no ACAO header, preflight not a 5xx (a positive control proves CORS is active); never `*` |
+| B10 | routing and error envelope | wrong method → 405 and undocumented `/api/v1/*` paths → 404, **both with the error envelope**; paths outside `/api/v1` → 404 |
+| B11 | no client-IP access | static scan: no non-test Go source references `RemoteAddr`, `X-Forwarded-For`, `X-Real-IP`, … |
+| B12 | store failure | a failing store → 5xx with the envelope; the message does not leak driver, host, or SQL details |
+| M-1 | migration applies | `0001_init.sql` applies to an empty schema; exactly `sessions`, `events`, `feedback`; RLS enabled on all three with no policies |
+| M-2 | columns, no PII | exact columns and types per table (including `events.seq`); no PII-like column names |
+| M-3 | keys | primary keys `id` on all three; FKs `events.session_id` and `feedback.session_id` → `sessions.id` |
+| M-4 | NOT NULL and defaults | exact NOT NULL sets (incl. `events.seq` and `events.client_ts`); `created_at` defaults to `now()`; `feedback.id` defaults to a UUID; `seq` increases in insert order |
+| M-5 | analytics indexes | `events_type_exercise_idx (event_type, exercise_id)`, `events_session_idx (session_id)`, `events_step_idx (step_id) WHERE event_type='answer_submitted'` |
+| M-6 | invalid state rejected | FK, CHECK (event_type, attempt 1–10, viewport, helpfulness, comments ≤ 2000), NOT NULL (incl. missing `client_ts`), duplicate id → the specific SQLSTATE; boundary values accepted |
+| PG1 | Ping | succeeds against a migrated database |
+| PG2 | CreateSession upsert | created → true, repeat → false; known values kept; null values filled by a later call |
+| PG3 | optional fields | absent metadata stored as NULL |
+| PG4 | InsertEvents fields and order | every field preserved (read back with SQL); `order by seq` equals batch order within and across batches |
+| PG5 | session upsert and enrichment | InsertEvents creates a missing session; keeps an existing one; a later CreateSession enriches it without changing `created_at`; both orders converge |
+| PG6 | idempotency and count | returns new-row counts 1, 0, 1 for first delivery / identical retry / retry plus a new event; a duplicate id within one call is stored and counted once; an id already stored under another session → 0, ownership unchanged |
+| PG7 | session ownership | events stored under the given session id |
+| Q1–Q7 | launch queries | seed fixed events, run each ANALYTICS §6 query verbatim, assert exact numbers |
+| U1 | UI boundary | screens/components/App never read `correctChoiceId` or misconceptions; import analytics only via `analytics/events` (and ModuleScreen/ExerciseScreen do import it, ANALYTICS §7); contain no fetch, `sendBeacon`, `XMLHttpRequest`, `keepalive`, `/api/v1`, `VITE_API_BASE_URL`, `traceds.sessionId`, `getSessionId`, `createAnalyticsClient`, or UUID generation (`randomUUID`, `getRandomValues`): `run_id` belongs to the analytics layer |
+| F-A1 | session id persisted | first call generates and stores a UUID under `traceds.sessionId`; the second call and a reload return it; an existing id is reused |
+| F-A2 | storage unavailable | `localStorage` reads, writes, or access throw → an in-memory UUID, stable for the page, no throw |
+| F-A3 | attempt numbers correct | 1, 2, 3 on one checkpoint; reset to 1 on the next step and on restart; one run id per run |
+| F-A4 | completion recorded once | emitted on the final correct answer (before Continue), once per run; restart and a second completion → a second event with a different `run_id` |
+| F-A5 | event payload shape | the exact LL-01 sequence with handwritten values; keys ⊆ R∪O ⊇ R per type; no `null` values (irrelevant keys omitted); UUID `event_id`s; ISO `client_ts` |
+| F-A6 | hint_shown paired with incorrect | each incorrect answer is followed by one `hint_shown` with the same step, choice, attempt, concept, and misconception |
+| F-A7 | batching, flush, order | 10 events trigger a flush; the 5 s timer flushes; page hide flushes with `keepalive`; never an empty batch; 1–50 per request; tracked order preserved; undefined fields omitted |
+| F-A8 | retry then drop | 5xx/network retried after 1 s and 3 s with an identical batch, then dropped; 4xx dropped immediately; no throws, no unhandled rejections |
+| F-A9 | analytics failure does not break learning | LL-01 completes when fetch throws, rejects, or hangs, storage throws, or `crypto.randomUUID` throws (each also proves that path was used) |
+| F-A10 | disabled without base URL | unset or empty `VITE_API_BASE_URL` → no fetch at all, learning works (client and app level, with a positive control) |
+| F-A11 | session bootstrap | one `POST /sessions` with exactly `{session_id, app_version, viewport}`, then one `session_started`; viewport `narrow` at `innerWidth` 767 and `wide` at 768; stored id reused; app renders when the POST fails; one `session_started` under StrictMode |
+| F-A12 | navigation events | `module_selected` on navigation and deep link, not on landing, re-render, or an unknown module; `exercise_started` per run; **no duplicates under React StrictMode** |
+| F-A13 | no PII on the wire | no request body has name/email/student-id/IP/user-agent keys or the user-agent string |
+| F-A14 | analytics boundary | `src/analytics/**` imports only analytics modules and `engine/types`; `client.ts`/`session.ts` are imported only by analytics modules and `main.tsx`; engine and viz never import analytics |
+| P3 | E2E offline analytics | all `/api/**` aborted → LL-01 completes with no error UI or page errors; the API was demonstrably called |
+| P4 | E2E slow analytics | API responds after 10 s → answer feedback appears in < 200 ms while slow requests are in flight |
 
 ### M8 — Feedback survey
 Files: `tests/components/FeedbackForm.test.tsx`, Go `feedback_test.go`,
@@ -336,6 +371,6 @@ EXERCISES.md.
 | events recorded correctly | B4, F-A5 |
 | attempt numbers correct | F-A3 |
 | exercise completion recorded once | E14, F-A4, B6 |
-| no PII required | B3, B8 |
+| no PII required | B3, B8, M-2, F-A13 |
 | analytics failure does not break learning | F-A9, P3, P4, SM6 |
 | E2E: landing → … → completion screen | P1, SM5 |

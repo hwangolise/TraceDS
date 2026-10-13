@@ -1,0 +1,4 @@
+-- 0001_init.sql: schema for sessions, events, feedback (docs/ARCHITECTURE.md §9.3).
+--
+-- M7A placeholder: intentionally empty. The migration tests (M-1..M-6) and
+-- launch-query tests (Q1–Q7) must fail against it. Written in M7 implementation.

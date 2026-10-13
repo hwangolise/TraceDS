@@ -116,7 +116,8 @@ content ──▶ engine/types
 engine  ──▶ (nothing but its own types)
 viz     ──▶ engine/types           (never engine.ts logic, never content)
 analytics ─▶ (nothing app-specific except event types)
-screens/components ──▶ engine, viz, analytics, content
+screens/components ──▶ engine, viz, content, and analytics/events.ts only
+main.tsx  ──▶ (composition root) may also use analytics/session.ts, client.ts
 ```
 
 `engine/` and the pure parts of `viz/` must not import React.
@@ -571,9 +572,15 @@ graph rendering. Frame return annotations will be added as an optional
   times with backoff, then drops the batch. **Every public function catches
   all errors and returns `void`.** Nothing awaits analytics on the learning
   path.
-- If `VITE_API_BASE_URL` is unset (local dev without a backend), the client
-  becomes a no-op.
-- The event vocabulary and payloads are defined in
+- `events.ts`: the **UI-facing tracking interface**. Screens and components
+  call only this module, with semantic actions. It owns `run_id` generation
+  (one stable id per run; a new one on restart or re-entry). Its functions
+  never throw and return `void`. UI code never imports `client.ts` or
+  `session.ts`, never generates analytics UUIDs, and contains no fetch,
+  batching, retry, session, or transport logic (tests U1, F-A14).
+- If `VITE_API_BASE_URL` is unset or empty (local dev without a backend), the
+  client becomes a no-op.
+- The event vocabulary, payloads, ordering, and viewport rule are defined in
   [ANALYTICS.md](ANALYTICS.md).
 
 ---
@@ -588,17 +595,30 @@ graph rendering. Frame return annotations will be added as an optional
   `DisallowUnknownFields` and `http.MaxBytesReader` (64 KiB), field
   validation, and CORS middleware with an origin allowlist from
   `ALLOWED_ORIGINS`.
-- `internal/store` defines a `Store` interface with `CreateSession`,
-  `InsertEvents`, `InsertFeedback`, and `Ping`. `postgres.go` is the pgx
+- `internal/store` defines a `Store` interface with `CreateSession`
+  (returns whether the row was created), `InsertEvents` (returns the number
+  of new rows), `InsertFeedback` (M8), and `Ping`. `postgres.go` is the pgx
   implementation. `memory.go` is an in-memory fake for handler tests. This is
   the only interface abstraction in the backend. It exists so handler tests
   run without a database.
 
 ### 9.2 API
 
-All bodies are JSON. All errors use the shape `{"error": "<message>"}`.
-Unknown fields are rejected with 400, which makes it hard to send PII
-accidentally.
+All bodies are JSON. **Every API-generated 4xx and 5xx under `/api/v1`**
+(validation errors, 404, 405, 413, and store or internal failures) uses the
+shape `{"error": "<message>"}` with `Content-Type: application/json`.
+Messages never expose database or internal details (driver errors, hosts,
+SQL). Unknown fields are rejected with 400, which makes it hard to send PII
+accidentally. A body over 64 KiB returns **413** (with the error envelope). A
+store failure returns a 5xx, so the client retries (ANALYTICS §4).
+
+**CORS:** an allowlisted origin gets `Access-Control-Allow-Origin: <origin>`.
+A request or preflight from any other origin may succeed (a preflight may
+return 204), but its response **never** includes
+`Access-Control-Allow-Origin`. A wildcard (`*`) is never sent.
+
+**Scope by milestone:** M7 implements `GET /health`, `POST /sessions`, and
+`POST /events`. `POST /feedback` is implemented and tested in M8.
 
 **`GET /api/v1/health`** → `200 {"status":"ok","database":"ok"|"unavailable"}`.
 It always returns 200 while the process is up. The database status is
@@ -608,10 +628,16 @@ informational, for smoke tests.
 ```json
 { "session_id": "uuid", "app_version": "2026.10.12-abc123", "viewport": "narrow" }
 ```
-This is an idempotent upsert (`ON CONFLICT DO NOTHING`). It returns `201`
-when created and `200` when the session already exists, with body
-`{"session_id": "..."}`. `viewport` is `narrow` or `wide`, which is enough to
-answer "does mobile work?" without fingerprinting.
+This is an idempotent upsert that **enriches** an existing row: on conflict it
+fills `app_version` and `viewport` only where they are still null
+(`coalesce(sessions.col, excluded.col)`). It never overwrites a known value,
+never creates a second row, and never changes `created_at`. This covers
+`/events` arriving first and creating the session without metadata. Both
+delivery orders converge to the same row. It returns `201` when created and
+`200` when the session already exists (enriched or not), with body
+`{"session_id": "..."}`. `viewport` is `narrow` (`innerWidth < 768`) or `wide`
+(`>= 768`), and any other value returns 400. That is enough to answer "does
+mobile work?" without fingerprinting.
 
 **`POST /api/v1/events`**
 ```json
@@ -622,13 +648,22 @@ answer "does mobile work?" without fingerprinting.
                 "concept_id": "aliasing", "misconception_id": "assignment-copies-object",
                 "client_ts": "2026-10-12T21:30:00.000Z" } ] }
 ```
-- 1–50 events per request. Each event is validated per ANALYTICS §3.
-- The session row is upserted first, so events are never lost when the
-  earlier `/sessions` call failed.
+- 1–50 events per request. Each event is validated per ANALYTICS §3,
+  including the required RFC 3339 `client_ts` (numeric offsets accepted).
+  An explicit `null` is rejected for every field (R, O, or —); optional means
+  the key may be omitted.
+- The session row is upserted first (insert if missing, no metadata), so
+  events are never lost when the earlier `/sessions` call failed.
 - Inserts use `ON CONFLICT (id) DO NOTHING` on `event_id`, so client retries
-  are idempotent.
-- The response is `202 {"accepted": n}`. If any event fails validation, the
-  whole batch gets 400, and the client drops it rather than retrying.
+  are idempotent. `event_id` is globally unique and its identity wins: a
+  duplicate within a batch is stored and counted once, and an id already
+  stored under another session is neither duplicated nor re-owned. Events are
+  inserted **in batch order**, and `seq` (`bigint generated always as
+  identity`) records deterministic persistence order.
+- The response is `202 {"accepted": n}`, where `n` is the number of **new**
+  rows (duplicates are not counted). If any event fails validation, the whole
+  batch gets 400 and nothing is stored, and the client drops it rather than
+  retrying.
 
 **`POST /api/v1/feedback`**
 ```json
@@ -636,7 +671,7 @@ answer "does mobile work?" without fingerprinting.
   "comments": "optional free text, ≤ 2000 chars" }
 ```
 The response is `201`. `requested_topic` must be one of the values in
-ANALYTICS §5.
+ANALYTICS §5. (M8.)
 
 No other endpoints exist. Adding one requires justification in docs and human
 approval.
@@ -653,6 +688,7 @@ create table sessions (
 
 create table events (
   id               uuid primary key,                       -- client event_id (idempotency)
+  seq              bigint generated always as identity,    -- storage order (batch order preserved)
   session_id       uuid not null references sessions(id),
   run_id           uuid,                                   -- one exercise attempt-through
   event_type       text not null check (event_type in (
@@ -667,7 +703,7 @@ create table events (
   attempt_number   integer check (attempt_number between 1 and 10),
   concept_id       text,
   misconception_id text,
-  client_ts        timestamptz,
+  client_ts        timestamptz not null,                   -- required by the API (ANALYTICS §3)
   created_at       timestamptz not null default now()
 );
 create index events_type_exercise_idx on events (event_type, exercise_id);

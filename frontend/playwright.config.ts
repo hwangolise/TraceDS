@@ -4,6 +4,9 @@ import { defineConfig, devices } from '@playwright/test'
 // Locally this uses the installed Google Chrome; CI installs Playwright's Chromium.
 const channel = process.env.CI ? undefined : 'chrome'
 
+/** Analytics origin baked into the E2E build. Nothing listens there. */
+const E2E_API_BASE = 'http://127.0.0.1:9'
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -23,5 +26,10 @@ export default defineConfig({
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Analytics is a no-op without a base URL (ARCHITECTURE §8), which would make
+    // the offline/slow-API tests (P3, P4) pass vacuously. The E2E build therefore
+    // points analytics at a closed local port; specs that care intercept
+    // **/api/** with page.route (ARCHITECTURE §11: backend mocked by route interception).
+    env: { VITE_API_BASE_URL: E2E_API_BASE },
   },
 })
