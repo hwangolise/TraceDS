@@ -10,12 +10,21 @@ runs, the student predicts what will happen. A wrong prediction gets a
 targeted conceptual hint and another try. A correct one animates the state
 change and explains why it happened. There is no signup.
 
+## Production
+
+**Live: https://trace-ds-lemon.vercel.app**
+
+| Piece | Where |
+|---|---|
+| Frontend (static SPA, hash routing) | Vercel, project root `frontend/` |
+| API | Cloud Run service `traceds-api`, project `traceds-yh`, region `us-west1` (`https://traceds-api-833265331667.us-west1.run.app`) |
+| Database | Supabase PostgreSQL (West US, Oregon), reached through the transaction pooler |
+
 ## Status
 
-**M0–M4 are approved; all four linked-list exercises are playable. M7
-(backend and anonymous analytics) is implemented and awaiting review
-and acceptance.** The launch release is the linked-list MVP; recursion follows after
-launch.
+**M0–M4, M7–M10 are complete. The linked-list MVP (LL-01..04)
+is live and ready for students.** Recursion (M5/M6) is post-launch work and
+waits for course material.
 
 ## V1 content
 
@@ -42,7 +51,7 @@ Library, `go test`, Playwright.
 - [ANALYTICS.md](docs/ANALYTICS.md): anonymous events and launch queries
 - [TESTING.md](docs/TESTING.md): the TDD test plan per milestone
 
-## Repository layout (planned)
+## Repository layout
 
 ```
 frontend/   React SPA (exercise engine, visualization, screens)
@@ -124,13 +133,37 @@ TEST_DATABASE_URL="postgres://traceds:traceds@localhost:5433/traceds?sslmode=dis
 docker build -t traceds-api backend/   # multi-stage → distroless, non-root, binary only
 ```
 
-### Deployment note (M10)
+## Deployment and rollback
 
-With the Supabase **transaction pooler** (port 6543), `DATABASE_URL` must
-include `default_query_exec_mode=simple_protocol` (ARCHITECTURE §9.4), for
-example `postgres://<user>:<password>@<pooler-host>:6543/postgres?default_query_exec_mode=simple_protocol`.
-Without it, every insert fails and analytics is silently lost. Full deploy
-steps arrive with M10.
+Deploys are manual (decision Q7). No credentials live in the repository;
+`.env` and `.env.*` are git-ignored. Never paste a connection string into a
+doc, issue, or commit.
+
+- **Database:** Supabase. The schema is applied once with
+  `psql "<connection string>" -f backend/migrations/0001_init.sql`. RLS is on for
+  all three tables with no policies, and the Supabase Data API is disabled.
+  Future schema changes are **forward migrations** (new numbered SQL files).
+  Do not drop or roll back production tables once students have generated data.
+- **API:** `gcloud run deploy traceds-api --source backend/ --region us-west1`.
+  `DATABASE_URL` comes from Google Secret Manager (mounted as an env var).
+  `ALLOWED_ORIGINS` is the Vercel production origin only. With the transaction
+  pooler (port 6543) the URL must include
+  `default_query_exec_mode=simple_protocol` (ARCHITECTURE §9.4), or inserts
+  fail and analytics is silently lost.
+- **Frontend:** Vercel builds `frontend/` (`npm run build`, output `dist/`). Its
+  only configuration is public: `VITE_API_BASE_URL` (the Cloud Run origin)
+  and `VITE_APP_VERSION`. Both are read at build time, so changing either
+  needs a redeploy.
+- **Health:** `GET /api/v1/health` returns `{"database":"ok","status":"ok"}`.
+
+**Rollback**
+- Frontend: promote a previous production deployment in Vercel (Instant
+  Rollback). If analytics itself is the problem, redeploy with
+  `VITE_API_BASE_URL` unset. Analytics becomes a no-op and the learning
+  experience is unchanged.
+- API: move Cloud Run traffic to the previous revision
+  (`gcloud run services update-traffic traceds-api --region us-west1 --to-revisions <revision>=100`).
+- Database: do not casually roll back or drop tables. Fix forward.
 
 ## Privacy
 
